@@ -11,15 +11,29 @@ Solidproxy uses environment variables (for docker compatibility).
 
 * `SOLIDPROXY_VERBOSE` enables logging to `stderr`
 * `SOLIDPROXY_PORT` sets the default port for the service
-* `SOLIDPROXY_WEBID` sets the URL (WebID) of the agent. This is important if you want to use the proxy for delegation of authenticated requests.
+* `SOLIDPROXY_AGENT` sets the URL (WebID) of the agent (in case it's on a different server). This is important if you want to use the proxy for delegation of authenticated requests.
+* `SOLIDPROXY_USER` sets the URL (WebID) of the User on whose behalf the request is being made (e.g. Bob's WebID)
 
 ***Example:***
 
 ```
 export SOLIDPROXY_VERBOSE="1"
 export SOLIDPROXY_PORT="3129"
-export SOLIDPROXY_WEBID="http://example.org:3129/webid#me"
+export SOLIDPROXY_AGENT="http://example.org:3129/webid#me"
+export SOLIDPROXY_USER="https://bob.com/profile#me"
 ```
+
+### User profile configuration
+
+For the delegated authentication to work, you need to indicate that you trust and use a third party agent to authenticate and perform requests on your behalf.
+
+This is just a simple matter of adding the following triple to your WebID profile:
+
+```
+<https://bob.come/profile#me> <http://www.w3.org/ns/auth/acl#delegates> <http://example.org:3129/webid#me> .
+```
+
+This triple says that you *delegate* the agent with the WebID `http://example.org:3129/webid#me`.
 
 ## Usage
 
