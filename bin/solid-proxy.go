@@ -4,7 +4,7 @@ import (
 	"net/http"
 	"os"
 
-	"github.com/deiu/solidproxy"
+	"github.com/solid/solidproxy"
 )
 
 func main() {
