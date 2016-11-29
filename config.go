@@ -14,7 +14,8 @@ type ServerConfig struct {
 	Verbose bool
 	Port    string
 	Version string
-	WebID   string
+	Agent   string
+	User    string
 }
 
 func NewServerConfig() *ServerConfig {

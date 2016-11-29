@@ -12,7 +12,6 @@ import (
 	"fmt"
 	"math/big"
 	"net/http"
-	"os"
 	"time"
 
 	"github.com/labstack/echo"
@@ -35,8 +34,7 @@ var (
 	rsaBits        = 2048
 )
 
-func init() {
-	agentWebID = os.Getenv("SOLIDPROXY_WEBID")
+func InitAgentWebID(conf *ServerConfig) {
 	// Create a new keypair
 	privKey, err = rsa.GenerateKey(rand.Reader, rsaBits)
 	if err != nil {
@@ -46,7 +44,7 @@ func init() {
 	exponentValue = fmt.Sprintf("%d", privKey.PublicKey.E)
 	modulusValue = fmt.Sprintf("%x", privKey.PublicKey.N)
 
-	agentCert, err = NewRSAcert(agentWebID, "Solid Proxy Agent", privKey)
+	agentCert, err = NewRSAcert(conf.Agent, "Solid Proxy Agent", privKey)
 
 	agentClient = &http.Client{
 		Transport: &http.Transport{
@@ -62,7 +60,7 @@ func init() {
 // *http.Request). It sets extra headers that are needed for serving the
 // agent's WebID profile document
 func WebIDHandler(c echo.Context) error {
-	Logger.Printf("New request for WebID from: %+v\n", c.Request().RemoteAddr)
+	Logger.Printf("New request for agent WebID from: %+v\n", c.Request().RemoteAddr)
 	// Do not return content
 	profileTemplate := `@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
 <>

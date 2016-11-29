@@ -24,6 +24,11 @@ func NewServer(config *ServerConfig) *echo.Echo {
 	Logger.Println("---- starting server ----")
 	Logger.Printf("config: %#v\n", config)
 
+	// Init proxy
+	InitProxy(config)
+	InitAgentWebID(config)
+
+	// Create new handler
 	handler := echo.New()
 
 	// Recover in case of panics

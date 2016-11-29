@@ -11,7 +11,7 @@ var (
 	proxy = goproxy.NewProxyHttpServer()
 )
 
-func init() {
+func InitProxy(conf *ServerConfig) {
 	proxy.OnResponse().DoFunc(func(r *http.Response, ctx *goproxy.ProxyCtx) *http.Response {
 		// CORS
 		r.Header.Set("Access-Control-Allow-Credentials", "true")
@@ -22,7 +22,7 @@ func init() {
 		if r.StatusCode == 401 {
 			Logger.Println("Resource " + ctx.Req.URL.String() + " requires authentication (HTTP 401). Retrying with server credentials...")
 			req, err := http.NewRequest("GET", ctx.Req.URL.String(), ctx.Req.Body)
-			req.Header.Add("On-Behalf-Of", "https://deiu.me/profile#me")
+			req.Header.Add("On-Behalf-Of", conf.User)
 			resp, err := agentClient.Do(req)
 			if err != nil {
 				Logger.Fatal("GET:", err)

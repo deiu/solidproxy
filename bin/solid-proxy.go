@@ -16,14 +16,17 @@ func main() {
 	if len(os.Getenv("SOLIDPROXY_PORT")) > 0 {
 		config.Port = os.Getenv("SOLIDPROXY_PORT") // default= :3129
 	}
-	if len(os.Getenv("SOLIDPROXY_WEBID")) > 0 {
-		config.WebID = os.Getenv("SOLIDPROXY_WEBID")
+	if len(os.Getenv("SOLIDPROXY_AGENT")) > 0 {
+		config.Agent = os.Getenv("SOLIDPROXY_AGENT")
+	}
+	if len(os.Getenv("SOLIDPROXY_USER")) > 0 {
+		config.User = os.Getenv("SOLIDPROXY_USER")
 	}
 
 	// Create a new server
 	e := solidproxy.NewServer(config)
 	// Start server
-	println("Starting Solid-proxy", solidproxy.GetVersion())
+	println("Starting SolidProxy", solidproxy.GetVersion())
 
 	// set config values
 	s := &http.Server{
