@@ -13,21 +13,22 @@ var (
 
 func init() {
 	proxy.OnResponse().DoFunc(func(r *http.Response, ctx *goproxy.ProxyCtx) *http.Response {
+		// CORS
+		r.Header.Set("Access-Control-Allow-Credentials", "true")
+		r.Header.Set("Access-Control-Expose-Headers", "User, Triples, Location, Link, Vary, Last-Modified, Content-Length")
+		r.Header.Set("Access-Control-Max-Age", "60")
+
+		// Retry with server credentials if authentication is required
 		if r.StatusCode == 401 {
-			Logger.Println(ctx.Req.URL)
-			client := &http.Client{}
+			Logger.Println("Resource " + ctx.Req.URL.String() + " requires authentication (HTTP 401). Retrying with server credentials...")
 			req, err := http.NewRequest("GET", ctx.Req.URL.String(), ctx.Req.Body)
 			req.Header.Add("On-Behalf-Of", "https://deiu.me/profile#me")
-			resp, err := client.Do(req)
+			resp, err := agentClient.Do(req)
 			if err != nil {
 				Logger.Fatal("GET:", err)
 			}
 			return resp
 		}
-		// CORS
-		r.Header.Set("Access-Control-Allow-Credentials", "true")
-		r.Header.Set("Access-Control-Expose-Headers", "User, Triples, Location, Link, Vary, Last-Modified, Content-Length")
-		r.Header.Set("Access-Control-Max-Age", "60")
 		return r
 	})
 }
