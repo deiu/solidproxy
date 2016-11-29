@@ -20,15 +20,17 @@ func InitProxy(conf *ServerConfig) {
 
 		// Retry with server credentials if authentication is required
 		if r.StatusCode == 401 {
-			Logger.Println("Resource " + ctx.Req.URL.String() + " requires authentication (HTTP 401). Retrying with server credentials...")
+			Logger.Println("Resource " + ctx.Req.URL.String() + " requires authentication (HTTP 401).")
 			req, err := http.NewRequest("GET", ctx.Req.URL.String(), ctx.Req.Body)
 			req.Header.Add("On-Behalf-Of", conf.User)
 			resp, err := agentClient.Do(req)
 			if err != nil {
 				Logger.Fatal("GET:", err)
 			}
+			Logger.Println("Retrying with server credentials...received data with status HTTP", resp.StatusCode)
 			return resp
 		}
+		Logger.Println("Received data with status HTTP", r.StatusCode)
 		return r
 	})
 }
