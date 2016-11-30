@@ -9,15 +9,17 @@ Proxy server with authentication (for WebID-TLS delegation) that can be used as 
 
 Solidproxy uses environment variables (for docker compatibility).
 
-* `SOLIDPROXY_VERBOSE` enables logging to `stderr`
-* `SOLIDPROXY_PORT` sets the default port for the service
-* `SOLIDPROXY_AGENT` sets the URL (WebID) of the agent (in case it's on a different server). This is important if you want to use the proxy for delegation of authenticated requests.
-* `SOLIDPROXY_USER` sets the URL (WebID) of the User on whose behalf the request is being made (e.g. Bob's WebID)
+* `SOLIDPROXY_VERBOSE` [default false] -- enables logging to `stderr`
+* `SOLIDPROXY_INSECURE` [default false] -- accept bad certificates (self-signed, expired, etc.) when connecting to remore servers
+* `SOLIDPROXY_PORT` [default 3129]-- the default port for the service
+* `SOLIDPROXY_AGENT` -- the URL (WebID) of the agent (in case it's on a different server). This is important if you want to use the proxy for delegation of authenticated requests.
+* `SOLIDPROXY_USER` -- the URL (WebID) of the User on whose behalf the request is being made (e.g. Bob's WebID)
 
 ***Example:***
 
 ```
 export SOLIDPROXY_VERBOSE="1"
+export SOLIDPROXY_INSECURE="1"
 export SOLIDPROXY_PORT="3129"
 export SOLIDPROXY_AGENT="http://example.org:3129/webid#me"
 export SOLIDPROXY_USER="https://bob.com/profile#me"
