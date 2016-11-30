@@ -26,7 +26,10 @@ func NewServer(config *ServerConfig) *echo.Echo {
 
 	// Init proxy
 	InitProxy(config)
-	InitAgentWebID(config)
+	err := InitAgentWebID(config)
+	if err != nil {
+		panic(err)
+	}
 
 	// Create new handler
 	handler := echo.New()
@@ -44,6 +47,10 @@ func NewServer(config *ServerConfig) *echo.Echo {
 	handler.OPTIONS("/webid", WebIDHandler)
 	handler.HEAD("/webid", WebIDHandler)
 	handler.GET("/webid", WebIDHandler)
+	// Catch all other routes with 501 - Not Implemented
+	handler.Any("/*", func(c echo.Context) error {
+		return c.String(http.StatusNotImplemented, "Not implemented")
+	})
 
 	return handler
 }
