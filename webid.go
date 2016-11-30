@@ -18,13 +18,11 @@ import (
 )
 
 var (
-	agentWebID  string
-	agentClient *http.Client
-	agentCert   *tls.Certificate
-	privKey     *rsa.PrivateKey
-
-	exponentValue string
-	modulusValue  string
+	agentProfile   string
+	agentWebID     string
+	webidTlsClient *http.Client
+	agentCert      *tls.Certificate
+	privKey        *rsa.PrivateKey
 
 	err error
 
@@ -34,19 +32,17 @@ var (
 	rsaBits        = 2048
 )
 
-func InitAgentWebID(conf *ServerConfig) {
+func InitAgentWebID(conf *ServerConfig) error {
 	// Create a new keypair
-	privKey, err = rsa.GenerateKey(rand.Reader, rsaBits)
+	privKey, E, N, err := NewRSAKey()
 	if err != nil {
-		Logger.Panic(err)
-		panic("Could not create keypair")
+		return err
 	}
-	exponentValue = fmt.Sprintf("%d", privKey.PublicKey.E)
-	modulusValue = fmt.Sprintf("%x", privKey.PublicKey.N)
 
+	agentProfile = NewAgentProfile(E, N)
 	agentCert, err = NewRSAcert(conf.Agent, "Solid Proxy Agent", privKey)
 
-	agentClient = &http.Client{
+	webidTlsClient = &http.Client{
 		Transport: &http.Transport{
 			TLSClientConfig: &tls.Config{
 				Certificates:       []tls.Certificate{*agentCert},
@@ -54,6 +50,19 @@ func InitAgentWebID(conf *ServerConfig) {
 			},
 		},
 	}
+	return nil
+}
+
+func NewRSAKey() (p *rsa.PrivateKey, e, n string, err error) {
+	p, err = rsa.GenerateKey(rand.Reader, rsaBits)
+	if err != nil {
+		Logger.Println(err.Error())
+		return
+	}
+	e = fmt.Sprintf("%d", p.PublicKey.E)
+	n = fmt.Sprintf("%x", p.PublicKey.N)
+
+	return
 }
 
 // WebIDHandler uses a closure with the signature func(http.ResponseWriter,
@@ -61,8 +70,13 @@ func InitAgentWebID(conf *ServerConfig) {
 // agent's WebID profile document
 func WebIDHandler(c echo.Context) error {
 	Logger.Printf("New request for agent WebID from: %+v\n", c.Request().RemoteAddr)
-	// Do not return content
-	profileTemplate := `@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+	c.Response().Header().Set("Content-Type", "text/turtle")
+	return c.String(http.StatusOK, agentProfile)
+}
+
+// NewAgentProfile returns a new WebID profile document for the agent
+func NewAgentProfile(exp string, mod string) string {
+	return `@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
 <>
     a <http://xmlns.com/foaf/0.1/PersonalProfileDocument> ;
     <http://xmlns.com/foaf/0.1/primaryTopic> <#me> .
@@ -73,10 +87,9 @@ func WebIDHandler(c echo.Context) error {
 
 <#key>
     a <http://www.w3.org/ns/auth/cert#RSAPublicKey> ;
-    <http://www.w3.org/ns/auth/cert#exponent> "` + exponentValue + `"^^<http://www.w3.org/2001/XMLSchema#int> ;
-    <http://www.w3.org/ns/auth/cert#modulus> "` + modulusValue + `"^^<http://www.w3.org/2001/XMLSchema#hexBinary> .
+    <http://www.w3.org/ns/auth/cert#exponent> "` + exp + `"^^<http://www.w3.org/2001/XMLSchema#int> ;
+    <http://www.w3.org/ns/auth/cert#modulus> "` + mod + `"^^<http://www.w3.org/2001/XMLSchema#hexBinary> .
 `
-	return c.String(http.StatusOK, profileTemplate)
 }
 
 // NewRSAcert creates a new RSA x509 self-signed certificate to use for
