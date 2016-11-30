@@ -13,6 +13,9 @@ func main() {
 	if len(os.Getenv("SOLIDPROXY_VERBOSE")) == 0 {
 		config.Verbose = false // default= true
 	}
+	if len(os.Getenv("SOLIDPROXY_INSECURE")) > 0 {
+		config.Insecure = true // default= false
+	}
 	if len(os.Getenv("SOLIDPROXY_PORT")) > 0 {
 		config.Port = os.Getenv("SOLIDPROXY_PORT") // default= :3129
 	}

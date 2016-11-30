@@ -11,18 +11,20 @@ var (
 )
 
 type ServerConfig struct {
-	Verbose bool
-	Port    string
-	Version string
-	Agent   string
-	User    string
+	Verbose  bool
+	Insecure bool
+	Port     string
+	Version  string
+	Agent    string
+	User     string
 }
 
 func NewServerConfig() *ServerConfig {
 	return &ServerConfig{
-		Verbose: true,
-		Port:    "3129",
-		Version: SERVER_VERSION,
+		Verbose:  false,
+		Insecure: false,
+		Port:     "3129",
+		Version:  SERVER_VERSION,
 	}
 }
 
