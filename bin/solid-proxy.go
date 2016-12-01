@@ -53,12 +53,12 @@ func main() {
 		configProxy.Port = os.Getenv("SOLIDPROXY_PROXYPORT") // default= :3129
 	}
 	// Enable or not HTTPS
-	if len(os.Getenv("SOLIDPROXY_ENABLEPROXYTLS")) > 0 {
-		configProxy.EnableTLS = true
+	if len(os.Getenv("SOLIDPROXY_DISABLEPROXYTLS")) == 0 {
+		configProxy.EnableTLS = false // default= true
 	}
 	// Agent config
 	if len(os.Getenv("SOLIDPROXY_AGENTPORT")) > 0 {
-		configAgent.Port = os.Getenv("SOLIDPROXY_AGENTPORT") // default= :3129
+		configAgent.Port = os.Getenv("SOLIDPROXY_AGENTPORT") // default= :3200
 	}
 
 	// Create handlers

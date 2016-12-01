@@ -21,7 +21,7 @@ func NewServerConfig() *ServerConfig {
 		Verbose:            false,
 		InsecureSkipVerify: false,
 		Port:               "3129",
-		EnableTLS:          false,
+		EnableTLS:          true,
 		Version:            SERVER_VERSION,
 	}
 }
