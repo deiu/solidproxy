@@ -1,30 +1,28 @@
 package solidproxy
 
-import (
-	"log"
-)
-
 var (
-	SERVER_VERSION = "v0.0.1"
-	debugFlags     = log.Flags() | log.Lshortfile
-	debugPrefix    = "[debug] "
+	SERVER_VERSION = "v0.1.0"
 )
 
 type ServerConfig struct {
-	Verbose  bool
-	Insecure bool
-	Port     string
-	Version  string
-	Agent    string
-	User     string
+	Verbose            bool
+	InsecureSkipVerify bool
+	Version            string
+	Agent              string
+	User               string
+	EnableTLS          bool
+	TLSKey             string
+	TLSCert            string
+	Port               string
 }
 
 func NewServerConfig() *ServerConfig {
 	return &ServerConfig{
-		Verbose:  false,
-		Insecure: false,
-		Port:     "3129",
-		Version:  SERVER_VERSION,
+		Verbose:            false,
+		InsecureSkipVerify: false,
+		Port:               "3129",
+		EnableTLS:          false,
+		Version:            SERVER_VERSION,
 	}
 }
 

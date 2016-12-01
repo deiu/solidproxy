@@ -25,6 +25,7 @@ func InitProxy(conf *ServerConfig) {
 
 		// Retry with server credentials if authentication is required
 		if r.StatusCode == 401 {
+			// for debugging
 			defer TimeTrack(time.Now(), "Fetching")
 			var resp *http.Response
 			var client *http.Client
@@ -38,7 +39,7 @@ func InitProxy(conf *ServerConfig) {
 				client = &http.Client{
 					Transport: &http.Transport{
 						TLSClientConfig: &tls.Config{
-							InsecureSkipVerify: conf.Insecure,
+							InsecureSkipVerify: conf.InsecureSkipVerify,
 						},
 					},
 				}
