@@ -13,8 +13,6 @@ import (
 	"math/big"
 	"net/http"
 	"time"
-
-	"github.com/labstack/echo"
 )
 
 var (
@@ -68,10 +66,11 @@ func NewRSAKey() (p *rsa.PrivateKey, e, n string, err error) {
 // WebIDHandler uses a closure with the signature func(http.ResponseWriter,
 // *http.Request). It sets extra headers that are needed for serving the
 // agent's WebID profile document
-func WebIDHandler(c echo.Context) error {
-	Logger.Printf("New request for agent WebID from: %+v\n", c.Request().RemoteAddr)
-	c.Response().Header().Set("Content-Type", "text/turtle")
-	return c.String(http.StatusOK, agentProfile)
+func WebIDHandler(w http.ResponseWriter, req *http.Request) {
+	Logger.Printf("New request for agent WebID from: %+v\n", req.RemoteAddr)
+	w.Header().Set("Content-Type", "text/turtle")
+	w.WriteHeader(200)
+	w.Write([]byte(agentProfile))
 }
 
 // NewAgentProfile returns a new WebID profile document for the agent

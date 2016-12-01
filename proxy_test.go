@@ -55,7 +55,7 @@ func MockServer() *echo.Echo {
 }
 
 func TestProxyNotAuthenticated(t *testing.T) {
-	req, err := http.NewRequest("GET", testServer.URL+"/proxy?uri="+testMockServer.URL+"/200", nil)
+	req, err := http.NewRequest("GET", testProxyServer.URL+"/proxy?uri="+testMockServer.URL+"/200", nil)
 	assert.NoError(t, err)
 	resp, err := testClient.Do(req)
 	assert.NoError(t, err)
@@ -63,13 +63,13 @@ func TestProxyNotAuthenticated(t *testing.T) {
 }
 
 func TestProxyAuthenticated(t *testing.T) {
-	req, err := http.NewRequest("GET", testServer.URL+"/proxy?uri="+testMockServer.URL+"/401", nil)
+	req, err := http.NewRequest("GET", testProxyServer.URL+"/proxy?uri="+testMockServer.URL+"/401", nil)
 	assert.NoError(t, err)
 	resp, err := testClient.Do(req)
 	assert.NoError(t, err)
 	assert.Equal(t, 200, resp.StatusCode)
 
-	req, err = http.NewRequest("GET", testServer.URL+"/proxy?uri="+testMockServer.URL+"/401", nil)
+	req, err = http.NewRequest("GET", testProxyServer.URL+"/proxy?uri="+testMockServer.URL+"/401", nil)
 	assert.NoError(t, err)
 	resp, err = testClient.Do(req)
 	assert.NoError(t, err)
@@ -77,13 +77,13 @@ func TestProxyAuthenticated(t *testing.T) {
 }
 
 func TestProxyBadURLParse(t *testing.T) {
-	req, err := http.NewRequest("GET", testServer.URL+"/proxy?uri=foo", nil)
+	req, err := http.NewRequest("GET", testProxyServer.URL+"/proxy?uri=foo", nil)
 	assert.NoError(t, err)
 	resp, err := testClient.Do(req)
 	assert.NoError(t, err)
 	assert.Equal(t, 500, resp.StatusCode)
 
-	req, err = http.NewRequest("GET", testServer.URL+"/proxy?uri=http//foo.bar", nil)
+	req, err = http.NewRequest("GET", testProxyServer.URL+"/proxy?uri=http//foo.bar", nil)
 	assert.NoError(t, err)
 	resp, err = testClient.Do(req)
 	assert.NoError(t, err)
