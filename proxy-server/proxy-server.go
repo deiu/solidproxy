@@ -20,7 +20,6 @@ var (
 func main() {
 	configProxy := solidproxy.NewServerConfig()
 	configAgent := solidproxy.NewServerConfig()
-	configAgent.EnableTLS = true
 
 	// logger
 	solidproxy.Logger = log.New(ioutil.Discard, "", 0)
@@ -53,8 +52,9 @@ func main() {
 		configProxy.Port = os.Getenv("SOLIDPROXY_PROXYPORT") // default= :3129
 	}
 	// Enable or not HTTPS
-	if len(os.Getenv("SOLIDPROXY_DISABLEPROXYTLS")) == 0 {
-		configProxy.EnableTLS = false // default= true
+	if len(os.Getenv("SOLIDPROXY_ENABLETLS")) > 0 {
+		configProxy.EnableTLS = true // default= true
+		configAgent.EnableTLS = true // default= true
 	}
 	// Agent config
 	if len(os.Getenv("SOLIDPROXY_AGENTPORT")) > 0 {
@@ -97,6 +97,7 @@ func NewServer(handler *echo.Echo, config *solidproxy.ServerConfig) (*http.Serve
 		}
 		s.TLSConfig = new(tls.Config)
 		s.TLSConfig.MinVersion = tls.VersionTLS12
+		// enable HTTP/2
 		s.TLSConfig.NextProtos = []string{"h2"}
 		// use strong crypto
 		s.TLSConfig.PreferServerCipherSuites = true
