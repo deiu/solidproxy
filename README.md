@@ -8,7 +8,25 @@ Proxy server with authentication (for WebID-TLS delegation) that can be used as 
 
 ## Installation
 
+### Using the source code on Github
+
 `go get -u github.com/solid/solidproxy/bin`
+
+### Using the Docker image
+
+***Note:*** The docker image is configured to run on HTTP by default. This means that you should set up a reverse proxy using Nginx or Apache, and handle the HTTPS configuration there.
+
+First, you have to pull the docker image:
+
+	docker pull solid/solidproxy
+
+Next, create a file called `env.list` in which you set the configuration variables (read below to find more about them).
+
+Once you're done with the config, save the file and run the docker image:
+
+	docker run --env-file ./env.list -p <host_proxyport>:<container_proxyport> -p <host_agentport>:<container_agentport> solid/solidproxy
+
+Replace the above port values with your own port numbers from your configuration.
 
 ## Configuration
 
@@ -20,9 +38,9 @@ Solidproxy uses environment variables (for docker compatibility).
 * `SOLIDPROXY_AGENTPORT` [default 3200]-- the default port for the agent WebID service
 * `SOLIDPROXY_AGENT` -- the URL (WebID) of the agent (in case it's on a different server). This is important if you want to use the proxy for delegation of authenticated requests.
 * `SOLIDPROXY_USER` -- the URL (WebID) of the User on whose behalf the request is being made (e.g. Bob's WebID)
+* `SOLIDPROXY_ENABLETLS` -- enable HTTPS for the proxy service
 * `SOLIDPROXY_TLSKEY` -- path to the TLS key file (using PEM format)
 * `SOLIDPROXY_TLSCERT` -- path to the TLS cert file (using PEM format)
-* `SOLIDPROXY_DISABLEPROXYTLS` -- disable HTTPS for the proxy service (!!! you should only do this if you run the proxy on localhost only !!!)
 
 ***Example:***
 
@@ -36,10 +54,9 @@ export SOLIDPROXY_AGENTPORT="3200"
 export SOLIDPROXY_AGENT="https://example.org:3200/webid#me"
 export SOLIDPROXY_USER="https://bob.com/profile#me"
 
+export SOLIDPROXY_ENABLETLS="1"
 export SOLIDPROXY_TLSKEY="test_key.pem"
 export SOLIDPROXY_TLSCERT="test_cert.pem"
-
-export SOLIDPROXY_DISABLEPROXYTLS="1"
 ```
 
 ### User profile configuration
@@ -52,7 +69,7 @@ This is just a simple matter of adding the following triple to your WebID profil
 <https://bob.com/profile#me> <http://www.w3.org/ns/auth/acl#delegates> <http://example.org:3200/webid#me> .
 ```
 
-This triple says that you *delegate* the agent with the WebID `http://example.org:3200/webid#me`.
+This triple says that you *delegate* the agent with the WebID `https://example.org:3200/webid#me`.
 
 ## Usage
 
