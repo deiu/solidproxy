@@ -4,13 +4,13 @@
 [![Build Status](https://travis-ci.org/solid/solidproxy.svg?branch=master)](https://travis-ci.org/solid/solidproxy)
 [![Coverage Status](https://coveralls.io/repos/github/solid/solidproxy/badge.svg?branch=master)](https://coveralls.io/github/solid/solidproxy?branch=master)
 
-Proxy server with authentication (for WebID-TLS delegation) that can be used as a microservice along a Solid server.
+Proxy server with authentication (for WebID-TLS delegation) that can be used as a micro-service along a Solid server.
 
 ## Installation
 
 ### Using the source code on Github
 
-`go get -u github.com/solid/solidproxy/bin`
+`go get -u github.com/solid/solidproxy/proxy-server`
 
 ### Using the Docker image
 
@@ -18,13 +18,13 @@ Proxy server with authentication (for WebID-TLS delegation) that can be used as 
 
 First, you have to pull the docker image:
 
-	docker pull solid/solidproxy
+	docker pull solidproject/solidproxy
 
 Next, create a file called `env.list` in which you set the configuration variables (read below to find more about them).
 
 Once you're done with the config, save the file and run the docker image:
 
-	docker run --env-file ./env.list -p <host_proxyport>:<container_proxyport> -p <host_agentport>:<container_agentport> solid/solidproxy
+	docker run --env-file ./env.list -p <host_proxyport>:<container_proxyport> -p <host_agentport>:<container_agentport> solidproject/solidproxy
 
 Replace the above port values with your own port numbers from your configuration.
 
