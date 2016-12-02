@@ -20,6 +20,7 @@ var (
 func main() {
 	configProxy := solidproxy.NewServerConfig()
 	configAgent := solidproxy.NewServerConfig()
+	configAgent.Port = "3200" // set default for agent
 
 	// logger
 	solidproxy.Logger = log.New(ioutil.Discard, "", 0)
