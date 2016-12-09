@@ -101,12 +101,8 @@ func ProxyHandler(w http.ResponseWriter, req *http.Request) {
 	}
 
 	w.WriteHeader(r.StatusCode)
-	body, err := ioutil.ReadAll(r.Body)
-	if err != nil {
-		Logger.Println("Can't read body")
-		w.WriteHeader(500)
-		return
-	}
+	// r.Body will be empty at worst, so it should never trigger an error
+	body, _ := ioutil.ReadAll(r.Body)
 	w.Write(body)
 
 	Logger.Println("Received public data with status HTTP", r.StatusCode)
