@@ -17,7 +17,6 @@ import (
 
 var (
 	agentProfile   string
-	agentWebID     string
 	webidTlsClient *http.Client
 	agentCert      *tls.Certificate
 	privKey        *rsa.PrivateKey
@@ -40,15 +39,18 @@ func InitAgentWebID(conf *ServerConfig) error {
 	agentProfile = NewAgentProfile(E, N)
 	agentCert, err = NewRSAcert(conf.Agent, "Solid Proxy Agent", privKey)
 
-	webidTlsClient = &http.Client{
+	return nil
+}
+
+func NewAgentClient(cert *tls.Certificate) *http.Client {
+	return &http.Client{
 		Transport: &http.Transport{
 			TLSClientConfig: &tls.Config{
-				Certificates:       []tls.Certificate{*agentCert},
+				Certificates:       []tls.Certificate{*cert},
 				InsecureSkipVerify: true,
 			},
 		},
 	}
-	return nil
 }
 
 func NewRSAKey() (p *rsa.PrivateKey, e, n string, err error) {

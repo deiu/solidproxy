@@ -1,7 +1,6 @@
 package solidproxy
 
 import (
-	"crypto/tls"
 	"io/ioutil"
 	"log"
 	"net/http"
@@ -20,6 +19,7 @@ var (
 )
 
 func init() {
+	var err error
 	debug := false
 	enableLogger := ioutil.Discard
 	if debug {
@@ -27,11 +27,15 @@ func init() {
 	}
 	Logger = log.New(enableLogger, "[debug] ", log.Flags()|log.Lshortfile)
 
+	testAgentWebID := "https://agent.com/webid#me"
+	testUserWebID := "https://alice.com/webid#me"
+
 	// ** PROXY **
 	proxyConf := NewServerConfig()
 	proxyConf.InsecureSkipVerify = true
-	proxyConf.User = "https://alice.com/webid#me"
-	proxyServer := NewProxyServer(proxyConf)
+	proxyConf.Agent = testAgentWebID
+	proxyConf.User = testUserWebID
+	proxyServer := NewProxyHandler(proxyConf)
 
 	// testProxyServer
 	testProxyServer = httptest.NewServer(proxyServer)
@@ -41,43 +45,25 @@ func init() {
 	agentConf := NewServerConfig()
 	agentConf.TLSKey = "test_key.pem"
 	agentConf.TLSCert = "test_cert.pem"
-	agentConf.Agent = "https://agent.com/webid#me"
-	agentConf.User = "https://alice.com/webid#me"
-	agentServer := NewAgentServer(agentConf)
+	agentConf.Agent = testAgentWebID
+	agentConf.User = testUserWebID
+	agentServer := NewAgentHandler(agentConf)
 	// testProxyServer
 	testAgentServer = httptest.NewUnstartedServer(agentServer)
-	testAgentServer.TLS = new(tls.Config)
-	testAgentServer.TLS.MinVersion = tls.VersionTLS12
-	testAgentServer.TLS.NextProtos = []string{"h2"}
-	// use strong crypto
-	testAgentServer.TLS.PreferServerCipherSuites = true
-	testAgentServer.TLS.CurvePreferences = []tls.CurveID{tls.CurveP521, tls.CurveP384, tls.CurveP256}
-	testAgentServer.TLS.CipherSuites = []uint16{
-		tls.TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,
-		tls.TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
-		tls.TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA,
-		tls.TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA,
-		tls.TLS_ECDHE_ECDSA_WITH_AES_256_CBC_SHA,
-		tls.TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA,
+	testAgentServer.TLS, err = NewTLSConfig(agentConf)
+	if err != nil {
+		panic(err)
 	}
-	testAgentServer.TLS.Certificates = make([]tls.Certificate, 1)
-	testAgentServer.TLS.Certificates[0], err = tls.LoadX509KeyPair(agentConf.TLSCert, agentConf.TLSKey)
 	testAgentServer.StartTLS()
 	testAgentServer.URL = strings.Replace(testAgentServer.URL, "127.0.0.1", "localhost", 1)
 
 	// ** CLIENT **
 	// testClient
-	testClient = &http.Client{
-		Transport: &http.Transport{
-			TLSClientConfig: &tls.Config{
-				InsecureSkipVerify: true,
-			},
-		},
-	}
+	testClient = NewClient(proxyConf.InsecureSkipVerify)
 }
 
 func TestServerVersion(t *testing.T) {
-	assert.NotEmpty(t, GetVersion())
+	assert.Equal(t, SERVER_VERSION, GetVersion())
 }
 
 func TestRouteNotImplemented(t *testing.T) {
@@ -111,7 +97,7 @@ func TestRouteProxyWithURI(t *testing.T) {
 	assert.Equal(t, 200, resp.StatusCode)
 }
 
-func TestRouteProxyNoURI(t *testing.T) {
+func TestRouteProxyNoURIParam(t *testing.T) {
 	req, err := http.NewRequest("GET", testProxyServer.URL+"/proxy", nil)
 	assert.NoError(t, err)
 	resp, err := testClient.Do(req)
@@ -119,7 +105,7 @@ func TestRouteProxyNoURI(t *testing.T) {
 	assert.Equal(t, 500, resp.StatusCode)
 }
 
-func TestRouteProxyEmptyURI(t *testing.T) {
+func TestRouteProxyEmptyURIValue(t *testing.T) {
 	req, err := http.NewRequest("GET", testProxyServer.URL+"/proxy?uri=", nil)
 	assert.NoError(t, err)
 	resp, err := testClient.Do(req)
