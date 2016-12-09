@@ -101,3 +101,10 @@ func TestRouteProxyEmptyURIValue(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, 400, resp.StatusCode)
 }
+
+func TestLogger(t *testing.T) {
+	config := NewServerConfig()
+	config.Verbose = true
+	logger := InitLogger(config)
+	assert.NotNil(t, logger)
+}
