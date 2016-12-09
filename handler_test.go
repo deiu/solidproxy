@@ -1,11 +1,8 @@
 package solidproxy
 
 import (
-	"io/ioutil"
-	"log"
 	"net/http"
 	"net/http/httptest"
-	"os"
 	"strings"
 	"testing"
 
@@ -13,28 +10,21 @@ import (
 )
 
 var (
-	testProxyServer *httptest.Server
-	testAgentServer *httptest.Server
-	testClient      *http.Client
+	testProxyServerS *httptest.Server
+	testProxyServer  *httptest.Server
+	testAgentServer  *httptest.Server
+	testClient       *http.Client
 )
 
 func init() {
 	var err error
-	debug := false
-	enableLogger := ioutil.Discard
-	if debug {
-		enableLogger = os.Stderr
-	}
-	Logger = log.New(enableLogger, "[debug] ", log.Flags()|log.Lshortfile)
 
-	testAgentWebID := "https://agent.com/webid#me"
-	testUserWebID := "https://alice.com/webid#me"
+	testAgentWebID := "https://example.com/webid#me"
 
 	// ** PROXY **
 	proxyConf := NewServerConfig()
 	proxyConf.InsecureSkipVerify = true
 	proxyConf.Agent = testAgentWebID
-	proxyConf.User = testUserWebID
 	proxyServer := NewProxyHandler(proxyConf)
 
 	// testProxyServer
@@ -46,7 +36,6 @@ func init() {
 	agentConf.TLSKey = "test_key.pem"
 	agentConf.TLSCert = "test_cert.pem"
 	agentConf.Agent = testAgentWebID
-	agentConf.User = testUserWebID
 	agentServer := NewAgentHandler(agentConf)
 	// testProxyServer
 	testAgentServer = httptest.NewUnstartedServer(agentServer)
@@ -102,7 +91,7 @@ func TestRouteProxyNoURIParam(t *testing.T) {
 	assert.NoError(t, err)
 	resp, err := testClient.Do(req)
 	assert.NoError(t, err)
-	assert.Equal(t, 500, resp.StatusCode)
+	assert.Equal(t, 400, resp.StatusCode)
 }
 
 func TestRouteProxyEmptyURIValue(t *testing.T) {
@@ -110,5 +99,5 @@ func TestRouteProxyEmptyURIValue(t *testing.T) {
 	assert.NoError(t, err)
 	resp, err := testClient.Do(req)
 	assert.NoError(t, err)
-	assert.Equal(t, 500, resp.StatusCode)
+	assert.Equal(t, 400, resp.StatusCode)
 }

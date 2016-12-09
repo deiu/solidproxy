@@ -37,9 +37,6 @@ func main() {
 		configProxy.Agent = os.Getenv("SOLIDPROXY_AGENT")
 		configAgent.Agent = os.Getenv("SOLIDPROXY_AGENT")
 	}
-	if len(os.Getenv("SOLIDPROXY_USER")) > 0 {
-		configProxy.User = os.Getenv("SOLIDPROXY_USER")
-	}
 	if len(os.Getenv("SOLIDPROXY_TLSKEY")) > 0 {
 		configProxy.TLSKey = os.Getenv("SOLIDPROXY_TLSKEY")
 		configAgent.TLSKey = os.Getenv("SOLIDPROXY_TLSKEY")

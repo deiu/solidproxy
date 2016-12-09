@@ -15,6 +15,7 @@ var (
 )
 
 func init() {
+	// ** MOCK Server **
 	e := MockServer()
 
 	// testServer
@@ -66,11 +67,18 @@ func TestProxyAuthenticated(t *testing.T) {
 	assert.NoError(t, err)
 	resp, err := testClient.Do(req)
 	assert.NoError(t, err)
+	assert.Equal(t, 401, resp.StatusCode)
+
+	req, err = http.NewRequest("GET", testProxyServer.URL+"/proxy?uri="+testMockServer.URL+"/401", nil)
+	assert.NoError(t, err)
+	req.Header.Set("User", "https://alice.com/profile#me")
+	resp, err = testClient.Do(req)
+	assert.NoError(t, err)
 	assert.Equal(t, 200, resp.StatusCode)
 
 	req, err = http.NewRequest("GET", testProxyServer.URL+"/proxy?uri="+testMockServer.URL+"/401", nil)
 	assert.NoError(t, err)
-	req.Header.Set("User", userWebID)
+	req.Header.Set("User", "https://alice.com/profile#me")
 	resp, err = testClient.Do(req)
 	assert.NoError(t, err)
 	assert.Equal(t, 200, resp.StatusCode)
@@ -81,18 +89,41 @@ func TestProxyBadURLParse(t *testing.T) {
 	assert.NoError(t, err)
 	resp, err := testClient.Do(req)
 	assert.NoError(t, err)
-	assert.Equal(t, 500, resp.StatusCode)
+	assert.Equal(t, 400, resp.StatusCode)
 
 	req, err = http.NewRequest("GET", testProxyServer.URL+"/proxy?uri=http//foo.bar", nil)
 	assert.NoError(t, err)
 	resp, err = testClient.Do(req)
+	assert.NoError(t, err)
+	assert.Equal(t, 400, resp.StatusCode)
+}
+
+func TestProxyBadRequest(t *testing.T) {
+	req, err := http.NewRequest("FOO", testProxyServer.URL+"/proxy?uri=foo", nil)
+	assert.NoError(t, err)
+	resp, err := testClient.Do(req)
+	assert.NoError(t, err)
+	assert.Equal(t, 405, resp.StatusCode)
+}
+
+func TestProxyNoSkipVerify(t *testing.T) {
+	conf := NewServerConfig()
+	conf.InsecureSkipVerify = false
+
+	handler := NewProxyHandler(conf)
+	// testProxyServer
+	server := httptest.NewServer(handler)
+	server.URL = strings.Replace(server.URL, "127.0.0.1", "localhost", 1)
+
+	req, err := http.NewRequest("GET", server.URL+"/proxy?uri="+testAgentServer.URL+"/webid", nil)
+	assert.NoError(t, err)
+	resp, err := testClient.Do(req)
 	assert.NoError(t, err)
 	assert.Equal(t, 500, resp.StatusCode)
 }
 
 func TestProxyNoUser(t *testing.T) {
 	conf := NewServerConfig()
-	conf.Verbose = true
 
 	handler := NewProxyHandler(conf)
 	// testProxyServer

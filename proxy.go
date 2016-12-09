@@ -10,42 +10,43 @@ import (
 func ProxyHandler(w http.ResponseWriter, req *http.Request) {
 	Logger.Println("New request from:", req.RemoteAddr, "for URI:", req.URL.String())
 
-	user := req.Header.Get("User")
-	// override if we have specified a user in config
-	if len(userWebID) > 0 {
-		user = userWebID
-	}
-
 	uri := req.FormValue("uri")
 	if len(uri) == 0 {
-		msg := "No URI was provided to the proxy!"
+		msg := "HTTP 400 - Bad Request. Please provide a URI to the proxy."
 		Logger.Println(msg, req.URL.String())
-		w.WriteHeader(500)
+		w.WriteHeader(400)
 		w.Write([]byte(msg))
 		return
 	}
 
 	resource, err := url.ParseRequestURI(uri)
 	if err != nil {
-		w.WriteHeader(500)
-		w.Write([]byte("Error parsing URL: " + req.URL.String() + " " + err.Error()))
 		Logger.Println("Error parsing URL:", req.URL, err.Error())
+		w.WriteHeader(400)
+		w.Write([]byte("HTTP 400 - Bad Request. You must provide a valid URI: " + req.URL.String()))
 		return
 	}
+	// rewrite URL
 	req.URL = resource
 	req.Host = resource.Host
 	req.RequestURI = resource.RequestURI()
+	// get user
+	user := req.Header.Get("User")
+
 	Logger.Println("Proxying request for URI:", req.URL, "and user:", user)
 
 	// build new response
-	plain, err := http.NewRequest("GET", req.URL.String(), req.Body)
-	if err != nil {
-		Logger.Fatal("GET error:", err)
-	}
+	// no error should exist at this point, it was caught earlier
+	// by url.Parse and the server handler
+	plain, _ := http.NewRequest(req.Method, req.URL.String(), req.Body)
+	// create a new client
 	client := NewClient(insecureSkipVerify)
 	r, err := client.Do(plain)
 	if err != nil {
-		Logger.Fatal("GET error:", err)
+		Logger.Println("Request execution error:", err)
+		w.WriteHeader(500)
+		w.Write([]byte(err.Error()))
+		return
 	}
 
 	// Retry with server credentials if authentication is required
@@ -68,7 +69,10 @@ func ProxyHandler(w http.ResponseWriter, req *http.Request) {
 		}
 		r, err = client.Do(authenticated)
 		if err != nil {
-			Logger.Fatal("GET error:", err)
+			Logger.Println("Request execution error on auth retry:", err)
+			w.WriteHeader(500)
+			w.Write([]byte(err.Error()))
+			return
 		}
 		// Store cookies per user and request host
 		if len(r.Cookies()) > 0 {
@@ -90,7 +94,7 @@ func ProxyHandler(w http.ResponseWriter, req *http.Request) {
 	// Write data back
 	// CORS
 	w.Header().Set("Access-Control-Allow-Credentials", "true")
-	w.Header().Set("Access-Control-Expose-Headers", "User, Triples, Location, Link, Vary, Last-Modified, Content-Length")
+	w.Header().Set("Access-Control-Expose-Headers", "User, Triples, Location, Origin, Link, Vary, Last-Modified, Content-Length")
 	w.Header().Set("Access-Control-Max-Age", "60")
 
 	// copy headers

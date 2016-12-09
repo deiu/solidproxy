@@ -2,8 +2,10 @@ package solidproxy
 
 import (
 	"crypto/tls"
+	"io/ioutil"
 	"log"
 	"net/http"
+	"os"
 	"sync"
 
 	"github.com/labstack/echo"
@@ -13,21 +15,28 @@ import (
 var (
 	Logger             *log.Logger
 	agentWebID         string
-	userWebID          string
 	insecureSkipVerify bool
 
 	cookies  = map[string]map[string][]*http.Cookie{}
 	cookiesL = new(sync.RWMutex)
 )
 
+func InitLogger(config *ServerConfig) {
+	logTo := ioutil.Discard
+	if config.Verbose {
+		logTo = os.Stderr
+	}
+	Logger = log.New(logTo, "[debug] ", log.Flags()|log.Lshortfile)
+}
+
 // NewServer creates a new server handler
 func NewProxyHandler(config *ServerConfig) *echo.Echo {
+	InitLogger(config)
 	Logger.Println("\n---- starting proxy server ----")
 	Logger.Printf("config: %#v\n", config)
 
 	// set local variables used by the proxy client
 	agentWebID = config.Agent
-	userWebID = config.User
 	insecureSkipVerify = config.InsecureSkipVerify
 
 	// Create new handler
@@ -50,6 +59,7 @@ func NewProxyHandler(config *ServerConfig) *echo.Echo {
 }
 
 func NewAgentHandler(config *ServerConfig) *echo.Echo {
+	InitLogger(config)
 	Logger.Println("\n---- starting agent server ----")
 	Logger.Printf("config: %#v\n", config)
 
