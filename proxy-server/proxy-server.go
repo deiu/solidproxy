@@ -1,7 +1,6 @@
 package main
 
 import (
-	"crypto/tls"
 	"errors"
 	"io/ioutil"
 	"log"
@@ -32,13 +31,11 @@ func main() {
 	}
 	if len(os.Getenv("SOLIDPROXY_INSECURE")) > 0 {
 		configProxy.InsecureSkipVerify = true // default= false
+		configAgent.InsecureSkipVerify = true // default= false
 	}
 	if len(os.Getenv("SOLIDPROXY_AGENT")) > 0 {
 		configProxy.Agent = os.Getenv("SOLIDPROXY_AGENT")
 		configAgent.Agent = os.Getenv("SOLIDPROXY_AGENT")
-	}
-	if len(os.Getenv("SOLIDPROXY_USER")) > 0 {
-		configProxy.User = os.Getenv("SOLIDPROXY_USER")
 	}
 	if len(os.Getenv("SOLIDPROXY_TLSKEY")) > 0 {
 		configProxy.TLSKey = os.Getenv("SOLIDPROXY_TLSKEY")
@@ -54,8 +51,8 @@ func main() {
 	}
 	// Enable or not HTTPS
 	if len(os.Getenv("SOLIDPROXY_ENABLETLS")) > 0 {
-		configProxy.EnableTLS = true // default= true
-		configAgent.EnableTLS = true // default= true
+		configProxy.EnableTLS = true // default= false
+		configAgent.EnableTLS = true // default= false
 	}
 	// Agent config
 	if len(os.Getenv("SOLIDPROXY_AGENTPORT")) > 0 {
@@ -63,24 +60,23 @@ func main() {
 	}
 
 	// Create handlers
-	proxyHandler := solidproxy.NewProxyServer(configProxy)
-	agentHandler := solidproxy.NewAgentServer(configAgent)
-	// Start server
-	solidproxy.Logger.Println("Starting SolidProxy", solidproxy.GetVersion())
+	agentHandler := solidproxy.NewAgentHandler(configAgent)
+	proxyHandler := solidproxy.NewProxyHandler(configProxy)
 
-	// start proxy server
-	proxyServer, err := NewServer(proxyHandler, configProxy)
-	if err != nil {
-		solidproxy.Logger.Println("Cannot start proxy server:", err.Error())
-		return
-	}
+	// Create servers
 	agentServer, err := NewServer(agentHandler, configAgent)
 	if err != nil {
-		solidproxy.Logger.Println("Cannot start agent server:", err.Error())
+		println("Cannot start agent server:", err.Error())
+		return
+	}
+	proxyServer, err := NewServer(proxyHandler, configProxy)
+	if err != nil {
+		println("Cannot start proxy server:", err.Error())
 		return
 	}
 
 	// Start servers
+	println("\nStarting SolidProxy", solidproxy.GetVersion())
 	go agentHandler.StartServer(agentServer)
 	proxyHandler.StartServer(proxyServer)
 }
@@ -96,23 +92,7 @@ func NewServer(handler *echo.Echo, config *solidproxy.ServerConfig) (*http.Serve
 		if len(config.TLSKey) == 0 || len(config.TLSCert) == 0 {
 			return s, errors.New("TLS cert or key missing")
 		}
-		s.TLSConfig = new(tls.Config)
-		s.TLSConfig.MinVersion = tls.VersionTLS12
-		// enable HTTP/2
-		s.TLSConfig.NextProtos = []string{"h2"}
-		// use strong crypto
-		s.TLSConfig.PreferServerCipherSuites = true
-		s.TLSConfig.CurvePreferences = []tls.CurveID{tls.CurveP521, tls.CurveP384, tls.CurveP256}
-		s.TLSConfig.CipherSuites = []uint16{
-			tls.TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,
-			tls.TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
-			tls.TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA,
-			tls.TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA,
-			tls.TLS_ECDHE_ECDSA_WITH_AES_256_CBC_SHA,
-			tls.TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA,
-		}
-		s.TLSConfig.Certificates = make([]tls.Certificate, 1)
-		s.TLSConfig.Certificates[0], err = tls.LoadX509KeyPair(config.TLSCert, config.TLSKey)
+		s.TLSConfig, err = solidproxy.NewTLSConfig(config)
 		if err != nil {
 			return s, err
 		}

@@ -9,7 +9,6 @@ type ServerConfig struct {
 	InsecureSkipVerify bool
 	Version            string
 	Agent              string
-	User               string
 	EnableTLS          bool
 	TLSKey             string
 	TLSCert            string

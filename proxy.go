@@ -1,96 +1,115 @@
 package solidproxy
 
 import (
-	"crypto/tls"
+	"io/ioutil"
 	"net/http"
 	"net/url"
-	"sync"
 	"time"
-
-	"github.com/elazarl/goproxy"
 )
-
-var (
-	proxy    = goproxy.NewProxyHttpServer()
-	cookies  = map[string]map[string][]*http.Cookie{}
-	cookiesL = new(sync.RWMutex)
-)
-
-func InitProxy(conf *ServerConfig) {
-	proxy.OnResponse().DoFunc(func(r *http.Response, ctx *goproxy.ProxyCtx) *http.Response {
-		// CORS
-		r.Header.Set("Access-Control-Allow-Credentials", "true")
-		r.Header.Set("Access-Control-Expose-Headers", "User, Triples, Location, Link, Vary, Last-Modified, Content-Length")
-		r.Header.Set("Access-Control-Max-Age", "60")
-
-		// Retry with server credentials if authentication is required
-		if r.StatusCode == 401 {
-			// for debugging
-			defer TimeTrack(time.Now(), "Fetching")
-			var resp *http.Response
-			var client *http.Client
-			var solutionMsg string
-			req, err := http.NewRequest("GET", ctx.Req.URL.String(), ctx.Req.Body)
-			req.Header.Add("On-Behalf-Of", conf.User)
-			// Retry the request
-			if len(cookies[conf.User]) > 0 { // Use existing cookie
-				req.AddCookie(cookies[conf.User][ctx.Req.Host][0])
-				// Create the client
-				client = &http.Client{
-					Transport: &http.Transport{
-						TLSClientConfig: &tls.Config{
-							InsecureSkipVerify: conf.InsecureSkipVerify,
-						},
-					},
-				}
-				solutionMsg = "Retrying with cookies"
-			} else { // Using WebIDTLS client
-				client = webidTlsClient
-				solutionMsg = "Retrying with WebID-TLS"
-			}
-			resp, err = client.Do(req)
-			if err != nil {
-				Logger.Fatal("GET:", err)
-			}
-			// Store cookies per user and request host
-			if len(resp.Cookies()) > 0 {
-				cookiesL.Lock()
-				// Should store cookies based on domain value AND path from cookie
-				cookies[conf.User] = map[string][]*http.Cookie{}
-				cookies[conf.User][ctx.Req.Host] = resp.Cookies()
-				Logger.Printf("Cookies: %+v\n", cookies)
-				cookiesL.Unlock()
-			}
-			Logger.Println("Resource "+ctx.Req.URL.String(),
-				"requires authentication (HTTP 401).", solutionMsg,
-				"resulted in HTTP", resp.StatusCode)
-			return resp
-		}
-		Logger.Println("Received data with status HTTP", r.StatusCode)
-		return r
-	})
-}
 
 func ProxyHandler(w http.ResponseWriter, req *http.Request) {
-	toProxy := req.FormValue("uri")
-	if len(toProxy) == 0 {
-		w.WriteHeader(500)
-		w.Write([]byte("No URI was provided to the proxy!"))
+	Logger.Println("New request from:", req.RemoteAddr, "for URI:", req.URL.String())
+
+	uri := req.FormValue("uri")
+	if len(uri) == 0 {
+		msg := "HTTP 400 - Bad Request. Please provide a URI to the proxy."
+		Logger.Println(msg, req.URL.String())
+		w.WriteHeader(400)
+		w.Write([]byte(msg))
 		return
 	}
 
-	uri, err := url.ParseRequestURI(toProxy)
+	resource, err := url.ParseRequestURI(uri)
 	if err != nil {
-		w.WriteHeader(500)
-		w.Write([]byte("Error parsing URL: " + req.URL.String() + " " + err.Error()))
 		Logger.Println("Error parsing URL:", req.URL, err.Error())
+		w.WriteHeader(400)
+		w.Write([]byte("HTTP 400 - Bad Request. You must provide a valid URI: " + req.URL.String()))
 		return
 	}
-	req.URL = uri
-	req.Host = uri.Host
-	req.RequestURI = uri.RequestURI()
-	Logger.Println("Proxying request for:", req.URL)
-	proxy.ServeHTTP(w, req)
+	// rewrite URL
+	req.URL = resource
+	req.Host = resource.Host
+	req.RequestURI = resource.RequestURI()
+	// get user
+	user := req.Header.Get("User")
+
+	Logger.Println("Proxying request for URI:", req.URL, "and user:", user)
+
+	// build new response
+	// no error should exist at this point, it was caught earlier
+	// by url.Parse and the server handler
+	plain, _ := http.NewRequest(req.Method, req.URL.String(), req.Body)
+	// create a new client
+	client := NewClient(insecureSkipVerify)
+	r, err := client.Do(plain)
+	if err != nil {
+		Logger.Println("Request execution error:", err)
+		w.WriteHeader(500)
+		w.Write([]byte(err.Error()))
+		return
+	}
+
+	// Retry with server credentials if authentication is required
+	if r.StatusCode == 401 && len(user) > 0 {
+		// for debugging
+		defer TimeTrack(time.Now(), "Fetching")
+		// build new response
+		authenticated, err := http.NewRequest("GET", req.URL.String(), req.Body)
+		authenticated.Header.Set("On-Behalf-Of", user)
+		var solutionMsg string
+		// Retry the request
+		if len(cookies[user]) > 0 { // Use existing cookie
+			authenticated.AddCookie(cookies[user][req.Host][0])
+			// Create the client
+			client = NewClient(insecureSkipVerify)
+			solutionMsg = "Retrying with cookies"
+		} else { // Using WebIDTLS client
+			client = NewAgentClient(agentCert)
+			solutionMsg = "Retrying with WebID-TLS"
+		}
+		r, err = client.Do(authenticated)
+		if err != nil {
+			Logger.Println("Request execution error on auth retry:", err)
+			w.WriteHeader(500)
+			w.Write([]byte(err.Error()))
+			return
+		}
+		// Store cookies per user and request host
+		if len(r.Cookies()) > 0 {
+			cookiesL.Lock()
+			// Should store cookies based on domain value AND path from cookie
+			cookies[user] = map[string][]*http.Cookie{}
+			cookies[user][req.Host] = r.Cookies()
+			Logger.Printf("Cookies: %+v\n", cookies)
+			cookiesL.Unlock()
+		}
+		Logger.Println("Resource "+authenticated.URL.String(),
+			"requires authentication (HTTP 401).", solutionMsg,
+			"resulted in HTTP", r.StatusCode)
+
+		Logger.Println("Got authenticated response code:", r.StatusCode)
+		w.Header().Set("Authenticated-Request", "1")
+	}
+
+	// Write data back
+	// CORS
+	w.Header().Set("Access-Control-Allow-Credentials", "true")
+	w.Header().Set("Access-Control-Expose-Headers", "User, Triples, Location, Origin, Link, Vary, Last-Modified, Content-Length")
+	w.Header().Set("Access-Control-Max-Age", "60")
+
+	// copy headers
+	for key, values := range r.Header {
+		for _, value := range values {
+			w.Header().Set(key, value)
+		}
+	}
+
+	w.WriteHeader(r.StatusCode)
+	// r.Body will be empty at worst, so it should never trigger an error
+	body, _ := ioutil.ReadAll(r.Body)
+	w.Write(body)
+
+	Logger.Println("Received public data with status HTTP", r.StatusCode)
 	return
 }
 
