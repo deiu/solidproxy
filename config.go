@@ -1,7 +1,7 @@
 package solidproxy
 
 var (
-	SERVER_VERSION = "v0.1.0"
+	SERVER_VERSION = "v1.0.0"
 )
 
 type ServerConfig struct {
