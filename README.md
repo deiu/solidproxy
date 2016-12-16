@@ -139,7 +139,7 @@ func main() {
 	mux.Handle("/proxy", handleProxy) // http://localhost:8080/proxy
 	mux.Handle("/agent", handleAgent) // http://localhost:8080/agent
 
-	log.Println("Listening...")
+	logger.Println("Listening...")
 	http.ListenAndServe(":8080", mux)
 }
 ```
