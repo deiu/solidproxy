@@ -28,7 +28,7 @@ Once you're done with the config, save the file and run the docker image:
 
 Replace the above port values with your own port numbers from your configuration.
 
-## Configuration
+## Configuration for standalone server
 
 Solidproxy uses environment variables (for docker compatibility).
 
@@ -90,4 +90,55 @@ GET /proxy?uri=https://alice.com/foo/bar HTTP/1.1
 Host: example.org:3129
 User: https://bob.com/webid#me
 ...
+```
+
+### Running as a library
+
+Here is a short example showing how you can use the proxy as a library in your own Go project.
+
+```golang
+package main
+
+import (
+	"log"
+	"net/http"
+	"os"
+
+	"github.com/solid/solidproxy"
+)
+
+func main() {
+	mux := http.NewServeMux()
+
+	// Skip verifying trust chain for certificates?
+	// Use true when dealing with self-signed certs (testing, etc.)
+	insecureSkipVerify := true
+
+	// Init logger
+	logger := log.New(os.Stderr, "[debug] ", log.Flags()|log.Lshortfile)
+
+	// create a new agent object with its corresponding key pair and profile
+	// document and serve it under /agent
+	agent, err := solidproxy.NewAgentLocal("http://localhost:8080/agent#me")
+	if err != nil {
+		log.Println("Error creating new agent:", err.Error())
+		return
+	}
+	agent.Log = logger
+
+	// create a new proxy object
+	proxy := solidproxy.NewProxy(agent, insecureSkipVerify)
+	proxy.Log = logger
+
+	// init handlers
+	handleProxy := http.HandlerFunc(proxy.Handler)
+	handleAgent := http.HandlerFunc(agent.Handler)
+
+	// set handlers
+	mux.Handle("/proxy", handleProxy)
+	mux.Handle("/agent", handleAgent)
+
+	log.Println("Listening...")
+	http.ListenAndServe(":8080", mux)
+}
 ```
