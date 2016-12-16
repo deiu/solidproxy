@@ -15,42 +15,37 @@ import (
 	"time"
 )
 
+type Agent struct {
+	WebID   string
+	Profile string
+	Cert    *tls.Certificate
+	Key     *rsa.PrivateKey
+}
+
 var (
-	agentProfile   string
-	webidTlsClient *http.Client
-	agentCert      *tls.Certificate
-	privKey        *rsa.PrivateKey
-
-	err error
-
+	err            error
 	subjectAltName = []int{2, 5, 29, 17}
 	notBefore      = time.Date(2000, 1, 1, 0, 0, 0, 0, time.UTC)
 	notAfter       = time.Date(2049, 12, 31, 23, 59, 59, 0, time.UTC)
 	rsaBits        = 2048
 )
 
-func InitAgentWebID(conf *ServerConfig) error {
+func NewAgent(uri string) (*Agent, error) {
+	agent := &Agent{
+		WebID: uri,
+	}
+
 	// Create a new keypair
 	privKey, E, N, err := NewRSAKey()
 	if err != nil {
-		return err
+		return agent, err
 	}
+	agent.Key = privKey
 
-	agentProfile = NewAgentProfile(E, N)
-	agentCert, err = NewRSAcert(conf.Agent, "Solid Proxy Agent", privKey)
+	agent.Profile = NewAgentProfile(E, N)
+	agent.Cert, err = NewRSAcert(uri, "Solid Proxy Agent", privKey)
 
-	return nil
-}
-
-func NewAgentClient(cert *tls.Certificate) *http.Client {
-	return &http.Client{
-		Transport: &http.Transport{
-			TLSClientConfig: &tls.Config{
-				Certificates:       []tls.Certificate{*cert},
-				InsecureSkipVerify: true,
-			},
-		},
-	}
+	return agent, nil
 }
 
 func NewRSAKey() (p *rsa.PrivateKey, e, n string, err error) {
@@ -68,11 +63,11 @@ func NewRSAKey() (p *rsa.PrivateKey, e, n string, err error) {
 // WebIDHandler uses a closure with the signature func(http.ResponseWriter,
 // *http.Request). It sets extra headers that are needed for serving the
 // agent's WebID profile document
-func WebIDHandler(w http.ResponseWriter, req *http.Request) {
+func (agent *Agent) Handler(w http.ResponseWriter, req *http.Request) {
 	Logger.Printf("New request for agent WebID from: %+v\n", req.RemoteAddr)
 	w.Header().Set("Content-Type", "text/turtle")
 	w.WriteHeader(200)
-	w.Write([]byte(agentProfile))
+	w.Write([]byte(agent.Profile))
 }
 
 // NewAgentProfile returns a new WebID profile document for the agent

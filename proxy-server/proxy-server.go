@@ -59,9 +59,17 @@ func main() {
 		configAgent.Port = os.Getenv("SOLIDPROXY_AGENTPORT") // default= :3200
 	}
 
+	// Create new agent
+	agent, err := solidproxy.NewAgent(configAgent.Agent)
+	if err != nil {
+		println("Cannot create new agent:", err.Error())
+		return
+	}
+	proxy := solidproxy.NewProxy(agent, configAgent.InsecureSkipVerify)
+
 	// Create handlers
-	agentHandler := solidproxy.NewAgentHandler(configAgent)
-	proxyHandler := solidproxy.NewProxyHandler(configProxy)
+	agentHandler := solidproxy.NewAgentHandler(configAgent, agent)
+	proxyHandler := solidproxy.NewProxyHandler(configProxy, proxy)
 
 	// Create servers
 	agentServer, err := NewServer(agentHandler, configAgent)

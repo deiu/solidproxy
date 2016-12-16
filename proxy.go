@@ -1,13 +1,33 @@
 package solidproxy
 
 import (
+	"crypto/tls"
 	"io/ioutil"
 	"net/http"
 	"net/url"
 	"time"
 )
 
-func ProxyHandler(w http.ResponseWriter, req *http.Request) {
+const (
+	MaxIdleConnections int = 20
+	RequestTimeout     int = 5
+)
+
+type Proxy struct {
+	HttpClient      *http.Client
+	HttpAgentClient *http.Client
+	Agent           *Agent
+}
+
+func NewProxy(agent *Agent, skip bool) *Proxy {
+	return &Proxy{
+		HttpClient:      NewClient(skip),
+		HttpAgentClient: NewAgentClient(agent.Cert, skip),
+		Agent:           agent,
+	}
+}
+
+func (p *Proxy) Handler(w http.ResponseWriter, req *http.Request) {
 	Logger.Println("New request from:", req.RemoteAddr, "for URI:", req.URL.String())
 
 	uri := req.FormValue("uri")
@@ -40,14 +60,16 @@ func ProxyHandler(w http.ResponseWriter, req *http.Request) {
 	// by url.Parse and the server handler
 	plain, _ := http.NewRequest(req.Method, req.URL.String(), req.Body)
 	// create a new client
-	client := NewClient(insecureSkipVerify)
-	r, err := client.Do(plain)
+
+	r, err := p.HttpClient.Do(plain)
 	if err != nil {
 		Logger.Println("Request execution error:", err)
 		w.WriteHeader(500)
 		w.Write([]byte(err.Error()))
 		return
 	}
+	// Close the connection to reuse it
+	defer r.Body.Close()
 
 	// Retry with server credentials if authentication is required
 	if r.StatusCode == 401 && len(user) > 0 {
@@ -57,14 +79,17 @@ func ProxyHandler(w http.ResponseWriter, req *http.Request) {
 		authenticated, err := http.NewRequest("GET", req.URL.String(), req.Body)
 		authenticated.Header.Set("On-Behalf-Of", user)
 		var solutionMsg string
+		var client *http.Client
 		// Retry the request
 		if len(cookies[user]) > 0 { // Use existing cookie
 			authenticated.AddCookie(cookies[user][req.Host][0])
 			// Create the client
-			client = NewClient(insecureSkipVerify)
+			// client = NewClient(insecureSkipVerify)
+			client = p.HttpClient
 			solutionMsg = "Retrying with cookies"
 		} else { // Using WebIDTLS client
-			client = NewAgentClient(agentCert)
+			// client = NewAgentClient(agentCert)
+			client = p.HttpAgentClient
 			solutionMsg = "Retrying with WebID-TLS"
 		}
 		r, err = client.Do(authenticated)
@@ -74,6 +99,9 @@ func ProxyHandler(w http.ResponseWriter, req *http.Request) {
 			w.Write([]byte(err.Error()))
 			return
 		}
+		// Close the connection to reuse it
+		defer r.Body.Close()
+
 		// Store cookies per user and request host
 		if len(r.Cookies()) > 0 {
 			cookiesL.Lock()
@@ -111,6 +139,31 @@ func ProxyHandler(w http.ResponseWriter, req *http.Request) {
 
 	Logger.Println("Received public data with status HTTP", r.StatusCode)
 	return
+}
+
+func NewClient(skip bool) *http.Client {
+	return &http.Client{
+		Transport: &http.Transport{
+			MaxIdleConnsPerHost: MaxIdleConnections,
+			TLSClientConfig: &tls.Config{
+				InsecureSkipVerify: skip,
+			},
+		},
+		Timeout: time.Duration(RequestTimeout) * time.Second,
+	}
+}
+
+func NewAgentClient(cert *tls.Certificate, skip bool) *http.Client {
+	return &http.Client{
+		Transport: &http.Transport{
+			MaxIdleConnsPerHost: MaxIdleConnections,
+			TLSClientConfig: &tls.Config{
+				Certificates:       []tls.Certificate{*cert},
+				InsecureSkipVerify: skip,
+			},
+		},
+		Timeout: time.Duration(RequestTimeout) * time.Second,
+	}
 }
 
 func TimeTrack(start time.Time, name string) {

@@ -13,9 +13,7 @@ import (
 )
 
 var (
-	Logger             *log.Logger
-	agentWebID         string
-	insecureSkipVerify bool
+	Logger *log.Logger
 
 	cookies  = map[string]map[string][]*http.Cookie{}
 	cookiesL = new(sync.RWMutex)
@@ -30,14 +28,10 @@ func InitLogger(config *ServerConfig) *log.Logger {
 }
 
 // NewServer creates a new server handler
-func NewProxyHandler(config *ServerConfig) *echo.Echo {
+func NewProxyHandler(config *ServerConfig, proxy *Proxy) *echo.Echo {
 	Logger = InitLogger(config)
 	Logger.Println("\n---- starting proxy server ----")
 	Logger.Printf("config: %#v\n", config)
-
-	// set local variables used by the proxy client
-	agentWebID = config.Agent
-	insecureSkipVerify = config.InsecureSkipVerify
 
 	// Create new handler
 	handler := echo.New()
@@ -49,7 +43,7 @@ func NewProxyHandler(config *ServerConfig) *echo.Echo {
 
 	// Proxy handler
 	// The proxy handler uses the standard ResponseWriter and Request objects
-	handler.Any("/proxy", echo.WrapHandler(http.HandlerFunc(ProxyHandler)))
+	handler.Any("/proxy", echo.WrapHandler(http.HandlerFunc(proxy.Handler)))
 	// Catch all other routes with 501 - Not Implemented
 	handler.Any("/*", func(c echo.Context) error {
 		return c.String(http.StatusNotImplemented, "Not implemented")
@@ -58,16 +52,10 @@ func NewProxyHandler(config *ServerConfig) *echo.Echo {
 	return handler
 }
 
-func NewAgentHandler(config *ServerConfig) *echo.Echo {
+func NewAgentHandler(config *ServerConfig, agent *Agent) *echo.Echo {
 	Logger = InitLogger(config)
 	Logger.Println("\n---- starting agent server ----")
 	Logger.Printf("config: %#v\n", config)
-
-	// Init
-	err := InitAgentWebID(config)
-	if err != nil {
-		panic(err)
-	}
 
 	// Create new handler
 	handler := echo.New()
@@ -76,25 +64,15 @@ func NewAgentHandler(config *ServerConfig) *echo.Echo {
 	handler.Use(middleware.Recover())
 
 	// Agent's WebID handler
-	handler.OPTIONS("/webid", echo.WrapHandler(http.HandlerFunc(WebIDHandler)))
-	handler.HEAD("/webid", echo.WrapHandler(http.HandlerFunc(WebIDHandler)))
-	handler.GET("/webid", echo.WrapHandler(http.HandlerFunc(WebIDHandler)))
+	handler.OPTIONS("/webid", echo.WrapHandler(http.HandlerFunc(agent.Handler)))
+	handler.HEAD("/webid", echo.WrapHandler(http.HandlerFunc(agent.Handler)))
+	handler.GET("/webid", echo.WrapHandler(http.HandlerFunc(agent.Handler)))
 	// Catch all other routes with 501 - Not Implemented
 	handler.Any("/*", func(c echo.Context) error {
 		return c.String(http.StatusNotImplemented, "Not implemented")
 	})
 
 	return handler
-}
-
-func NewClient(skip bool) *http.Client {
-	return &http.Client{
-		Transport: &http.Transport{
-			TLSClientConfig: &tls.Config{
-				InsecureSkipVerify: skip,
-			},
-		},
-	}
 }
 
 func NewTLSConfig(config *ServerConfig) (*tls.Config, error) {
