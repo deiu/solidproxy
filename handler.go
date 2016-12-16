@@ -13,8 +13,6 @@ import (
 )
 
 var (
-	Logger *log.Logger
-
 	cookies  = map[string]map[string][]*http.Cookie{}
 	cookiesL = new(sync.RWMutex)
 )
@@ -29,9 +27,11 @@ func InitLogger(config *ServerConfig) *log.Logger {
 
 // NewServer creates a new server handler
 func NewProxyHandler(config *ServerConfig, proxy *Proxy) *echo.Echo {
-	Logger = InitLogger(config)
-	Logger.Println("\n---- starting proxy server ----")
-	Logger.Printf("config: %#v\n", config)
+	logger := InitLogger(config)
+	logger.Println("\n---- starting proxy server ----")
+	logger.Printf("config: %#v\n", config)
+
+	proxy.Log = logger
 
 	// Create new handler
 	handler := echo.New()
@@ -53,9 +53,10 @@ func NewProxyHandler(config *ServerConfig, proxy *Proxy) *echo.Echo {
 }
 
 func NewAgentHandler(config *ServerConfig, agent *Agent) *echo.Echo {
-	Logger = InitLogger(config)
-	Logger.Println("\n---- starting agent server ----")
-	Logger.Printf("config: %#v\n", config)
+	logger := InitLogger(config)
+	logger.Println("\n---- starting agent server ----")
+	logger.Printf("config: %#v\n", config)
+	agent.Log = logger
 
 	// Create new handler
 	handler := echo.New()

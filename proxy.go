@@ -3,6 +3,7 @@ package solidproxy
 import (
 	"crypto/tls"
 	"io/ioutil"
+	"log"
 	"net/http"
 	"net/url"
 	"time"
@@ -16,24 +17,30 @@ const (
 type Proxy struct {
 	HttpClient      *http.Client
 	HttpAgentClient *http.Client
+	Log             *log.Logger
 	Agent           *Agent
 }
 
 func NewProxy(agent *Agent, skip bool) *Proxy {
-	return &Proxy{
-		HttpClient:      NewClient(skip),
-		HttpAgentClient: NewAgentClient(agent.Cert, skip),
-		Agent:           agent,
+	proxy := &Proxy{
+		HttpClient: NewClient(skip),
+		Agent:      agent,
 	}
+
+	if agent.Cert != nil {
+		proxy.HttpAgentClient = NewAgentClient(agent.Cert, skip)
+	}
+
+	return proxy
 }
 
 func (p *Proxy) Handler(w http.ResponseWriter, req *http.Request) {
-	Logger.Println("New request from:", req.RemoteAddr, "for URI:", req.URL.String())
+	p.Log.Println("New request from:", req.RemoteAddr, "for URI:", req.URL.String())
 
 	uri := req.FormValue("uri")
 	if len(uri) == 0 {
 		msg := "HTTP 400 - Bad Request. Please provide a URI to the proxy."
-		Logger.Println(msg, req.URL.String())
+		p.Log.Println(msg, req.URL.String())
 		w.WriteHeader(400)
 		w.Write([]byte(msg))
 		return
@@ -41,7 +48,7 @@ func (p *Proxy) Handler(w http.ResponseWriter, req *http.Request) {
 
 	resource, err := url.ParseRequestURI(uri)
 	if err != nil {
-		Logger.Println("Error parsing URL:", req.URL, err.Error())
+		p.Log.Println("Error parsing URL:", req.URL, err.Error())
 		w.WriteHeader(400)
 		w.Write([]byte("HTTP 400 - Bad Request. You must provide a valid URI: " + req.URL.String()))
 		return
@@ -53,7 +60,7 @@ func (p *Proxy) Handler(w http.ResponseWriter, req *http.Request) {
 	// get user
 	user := req.Header.Get("User")
 
-	Logger.Println("Proxying request for URI:", req.URL, "and user:", user)
+	p.Log.Println("Proxying request for URI:", req.URL, "and user:", user)
 
 	// build new response
 	// no error should exist at this point, it was caught earlier
@@ -63,18 +70,16 @@ func (p *Proxy) Handler(w http.ResponseWriter, req *http.Request) {
 
 	r, err := p.HttpClient.Do(plain)
 	if err != nil {
-		Logger.Println("Request execution error:", err)
+		p.Log.Println("Request execution error:", err)
 		w.WriteHeader(500)
 		w.Write([]byte(err.Error()))
 		return
 	}
-	// Close the connection to reuse it
-	defer r.Body.Close()
 
 	// Retry with server credentials if authentication is required
-	if r.StatusCode == 401 && len(user) > 0 {
+	if r.StatusCode == 401 && len(user) > 0 && p.HttpAgentClient != nil {
 		// for debugging
-		defer TimeTrack(time.Now(), "Fetching")
+		defer TimeTrack(time.Now(), "Fetching", p.Log)
 		// build new response
 		authenticated, err := http.NewRequest("GET", req.URL.String(), req.Body)
 		authenticated.Header.Set("On-Behalf-Of", user)
@@ -84,22 +89,22 @@ func (p *Proxy) Handler(w http.ResponseWriter, req *http.Request) {
 		if len(cookies[user]) > 0 { // Use existing cookie
 			authenticated.AddCookie(cookies[user][req.Host][0])
 			// Create the client
-			// client = NewClient(insecureSkipVerify)
 			client = p.HttpClient
 			solutionMsg = "Retrying with cookies"
 		} else { // Using WebIDTLS client
-			// client = NewAgentClient(agentCert)
 			client = p.HttpAgentClient
 			solutionMsg = "Retrying with WebID-TLS"
 		}
+		// Close the previous response to reuse the connection
+		r.Body.Close()
 		r, err = client.Do(authenticated)
 		if err != nil {
-			Logger.Println("Request execution error on auth retry:", err)
+			p.Log.Println("Request execution error on auth retry:", err)
 			w.WriteHeader(500)
 			w.Write([]byte(err.Error()))
 			return
 		}
-		// Close the connection to reuse it
+		// Close the response to reuse the connection
 		defer r.Body.Close()
 
 		// Store cookies per user and request host
@@ -108,14 +113,14 @@ func (p *Proxy) Handler(w http.ResponseWriter, req *http.Request) {
 			// Should store cookies based on domain value AND path from cookie
 			cookies[user] = map[string][]*http.Cookie{}
 			cookies[user][req.Host] = r.Cookies()
-			Logger.Printf("Cookies: %+v\n", cookies)
+			p.Log.Printf("Cookies: %+v\n", cookies)
 			cookiesL.Unlock()
 		}
-		Logger.Println("Resource "+authenticated.URL.String(),
+		p.Log.Println("Resource "+authenticated.URL.String(),
 			"requires authentication (HTTP 401).", solutionMsg,
 			"resulted in HTTP", r.StatusCode)
 
-		Logger.Println("Got authenticated response code:", r.StatusCode)
+		p.Log.Println("Got authenticated response code:", r.StatusCode)
 		w.Header().Set("Authenticated-Request", "1")
 	}
 
@@ -137,7 +142,7 @@ func (p *Proxy) Handler(w http.ResponseWriter, req *http.Request) {
 	body, _ := ioutil.ReadAll(r.Body)
 	w.Write(body)
 
-	Logger.Println("Received public data with status HTTP", r.StatusCode)
+	p.Log.Println("Received public data with status HTTP", r.StatusCode)
 	return
 }
 
@@ -154,6 +159,7 @@ func NewClient(skip bool) *http.Client {
 }
 
 func NewAgentClient(cert *tls.Certificate, skip bool) *http.Client {
+	//TODO handle bad/missing cert
 	return &http.Client{
 		Transport: &http.Transport{
 			MaxIdleConnsPerHost: MaxIdleConnections,
@@ -166,7 +172,7 @@ func NewAgentClient(cert *tls.Certificate, skip bool) *http.Client {
 	}
 }
 
-func TimeTrack(start time.Time, name string) {
+func TimeTrack(start time.Time, name string, logger *log.Logger) {
 	elapsed := time.Since(start)
-	Logger.Printf("%s finished in %s", name, elapsed)
+	logger.Printf("%s finished in %s", name, elapsed)
 }

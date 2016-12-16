@@ -24,7 +24,7 @@ func init() {
 	testAgentWebID = "https://example.com/webid#me"
 
 	// ** AGENT **
-	agent, err := NewAgent(testAgentWebID)
+	agent, err := NewAgentLocal(testAgentWebID)
 	if err != nil {
 		panic(err)
 	}

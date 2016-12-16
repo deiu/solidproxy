@@ -110,7 +110,7 @@ func TestProxyNoSkipVerify(t *testing.T) {
 	skip := false
 	conf := NewServerConfig()
 	conf.InsecureSkipVerify = skip
-	agent, err := NewAgent(testAgentWebID)
+	agent, err := NewAgentLocal(testAgentWebID)
 	assert.NoError(t, err)
 	proxy := NewProxy(agent, skip)
 
@@ -127,6 +127,24 @@ func TestProxyNoSkipVerify(t *testing.T) {
 }
 
 func TestProxyNoUser(t *testing.T) {
+	conf := NewServerConfig()
+	agent, err := NewAgentLocal(testAgentWebID)
+	assert.NoError(t, err)
+	proxy := NewProxy(agent, true)
+
+	handler := NewProxyHandler(conf, proxy)
+	// testProxyServer
+	server := httptest.NewServer(handler)
+	server.URL = strings.Replace(server.URL, "127.0.0.1", "localhost", 1)
+
+	req, err := http.NewRequest("GET", server.URL+"/proxy?uri="+testMockServer.URL+"/401", nil)
+	assert.NoError(t, err)
+	resp, err := testClient.Do(req)
+	assert.NoError(t, err)
+	assert.Equal(t, 401, resp.StatusCode)
+}
+
+func TestProxyNoAgent(t *testing.T) {
 	conf := NewServerConfig()
 	agent, err := NewAgent(testAgentWebID)
 	assert.NoError(t, err)

@@ -22,12 +22,12 @@ func main() {
 	configAgent.Port = "3200" // set default for agent
 
 	// logger
-	solidproxy.Logger = log.New(ioutil.Discard, "", 0)
+	logger := log.New(ioutil.Discard, "", 0)
 
 	if len(os.Getenv("SOLIDPROXY_VERBOSE")) > 0 {
 		configProxy.Verbose = true // default= false
 		configAgent.Verbose = true // default= false
-		solidproxy.Logger = log.New(os.Stderr, debugPrefix, debugFlags)
+		logger = log.New(os.Stderr, debugPrefix, debugFlags)
 	}
 	if len(os.Getenv("SOLIDPROXY_INSECURE")) > 0 {
 		configProxy.InsecureSkipVerify = true // default= false
@@ -60,12 +60,14 @@ func main() {
 	}
 
 	// Create new agent
-	agent, err := solidproxy.NewAgent(configAgent.Agent)
+	agent, err := solidproxy.NewAgentLocal(configAgent.Agent)
 	if err != nil {
 		println("Cannot create new agent:", err.Error())
 		return
 	}
+	agent.Log = logger
 	proxy := solidproxy.NewProxy(agent, configAgent.InsecureSkipVerify)
+	proxy.Log = logger
 
 	// Create handlers
 	agentHandler := solidproxy.NewAgentHandler(configAgent, agent)
