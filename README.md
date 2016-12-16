@@ -110,10 +110,6 @@ import (
 func main() {
 	mux := http.NewServeMux()
 
-	// Skip verifying trust chain for certificates?
-	// Use true when dealing with self-signed certs (testing, etc.)
-	insecureSkipVerify := true
-
 	// Init logger
 	logger := log.New(os.Stderr, "[debug] ", log.Flags()|log.Lshortfile)
 
@@ -124,10 +120,15 @@ func main() {
 		log.Println("Error creating new agent:", err.Error())
 		return
 	}
+	// assign logger
 	agent.Log = logger
-
+	
+	// Skip verifying trust chain for certificates?
+	// Use true when dealing with self-signed certs (testing, etc.)
+	insecureSkipVerify := true
 	// create a new proxy object
 	proxy := solidproxy.NewProxy(agent, insecureSkipVerify)
+	// assign logger
 	proxy.Log = logger
 
 	// init handlers
@@ -135,8 +136,8 @@ func main() {
 	handleAgent := http.HandlerFunc(agent.Handler)
 
 	// set handlers
-	mux.Handle("/proxy", handleProxy)
-	mux.Handle("/agent", handleAgent)
+	mux.Handle("/proxy", handleProxy) // http://localhost:8080/proxy
+	mux.Handle("/agent", handleAgent) // http://localhost:8080/agent
 
 	log.Println("Listening...")
 	http.ListenAndServe(":8080", mux)
