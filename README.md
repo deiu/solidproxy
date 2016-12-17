@@ -137,13 +137,11 @@ func main() {
 	proxy.Log = logger
 
 	// Prepare proxy handler and serve it at http://localhost:8080/proxy
-	handleProxy := http.HandlerFunc(proxy.Handler)
-	mux.Handle("/proxy", handleProxy) 
+	mux.HandleFunc("/proxy", proxy.Handler) 
 
 	// The handleAgent is only needed if you plan to serve the agent's WebID
 	// profile yourself; it will be available at http://localhost:8080/agent
-	handleAgent := http.HandlerFunc(agent.Handler)
-	mux.Handle("/agent", handleAgent) 
+	mux.HandleFunc("/agent", agent.Handler) 
 
 	logger.Println("Listening...")
 	http.ListenAndServe(":8080", mux)
