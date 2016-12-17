@@ -78,10 +78,10 @@ func (p *Proxy) Handler(w http.ResponseWriter, req *http.Request) {
 
 	// Retry with server credentials if authentication is required
 	if r.StatusCode == 401 && len(user) > 0 && p.HttpAgentClient != nil {
-		// for debugging
-		defer TimeTrack(time.Now(), "Fetching", p.Log)
+		// Log the time it takes to finish the request (for debugging)
+		defer TimeTrack(time.Now(), req.Method+" operation", p.Log)
 		// build new response
-		authenticated, err := http.NewRequest("GET", req.URL.String(), req.Body)
+		authenticated, err := http.NewRequest(req.Method, req.URL.String(), req.Body)
 		authenticated.Header.Set("On-Behalf-Of", user)
 		var solutionMsg string
 		var client *http.Client
@@ -110,7 +110,7 @@ func (p *Proxy) Handler(w http.ResponseWriter, req *http.Request) {
 		// Store cookies per user and request host
 		if len(r.Cookies()) > 0 {
 			cookiesL.Lock()
-			// Should store cookies based on domain value AND path from cookie
+			// TODO: should store cookies based on domain value AND path from cookie
 			cookies[user] = map[string][]*http.Cookie{}
 			cookies[user][req.Host] = r.Cookies()
 			p.Log.Printf("Cookies: %+v\n", cookies)
