@@ -59,7 +59,15 @@ func init() {
 }
 
 func TestServerVersion(t *testing.T) {
-	assert.Equal(t, SERVER_VERSION, GetVersion())
+	assert.Equal(t, ServerVersion, GetServerVersion())
+}
+
+func TestServerName(t *testing.T) {
+	assert.Equal(t, ServerName, GetServerName())
+}
+
+func TestServerFullName(t *testing.T) {
+	assert.Equal(t, ServerName+"-"+ServerVersion, GetServerFullName())
 }
 
 func TestRouteDoesNotExist(t *testing.T) {

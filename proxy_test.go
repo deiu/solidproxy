@@ -23,10 +23,19 @@ func init() {
 	testMockServer.URL = strings.Replace(testMockServer.URL, "127.0.0.1", "localhost", 1)
 }
 
+func setOrigin(w http.ResponseWriter, req *http.Request) {
+	origin := req.Header.Get("Origin")
+	if len(origin) == 0 {
+		origin = "*"
+	}
+	w.Header().Set("Access-Control-Allow-Origin", origin)
+}
+
 func MockServer() http.Handler {
 	// Create new handler
 	handler := http.NewServeMux()
 	handler.Handle("/401", http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		setOrigin(w, req)
 		user := req.Header.Get("On-Behalf-Of")
 		if len(user) == 0 {
 			w.WriteHeader(401)
@@ -54,12 +63,15 @@ func MockServer() http.Handler {
 	}))
 
 	handler.Handle("/200", http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		setOrigin(w, req)
+		w.Header().Set("User", req.Header.Get("User"))
 		w.WriteHeader(200)
 		w.Write([]byte("foo"))
 		return
 	}))
 
 	handler.Handle("/method", http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		setOrigin(w, req)
 		w.WriteHeader(200)
 		w.Write([]byte(req.Method))
 		return
@@ -121,6 +133,19 @@ func TestProxyMethodOPTIONS(t *testing.T) {
 	body, err := ioutil.ReadAll(resp.Body)
 	resp.Body.Close()
 	assert.Equal(t, "OPTIONS", string(body))
+}
+
+func TestProxyHeaders(t *testing.T) {
+	origin := "example.org"
+	req, err := http.NewRequest("GET", testProxyServer.URL+"/proxy?uri="+testMockServer.URL+"/200", nil)
+	assert.NoError(t, err)
+	req.Header.Set("Origin", origin)
+	req.Header.Set("User", testAgentWebID)
+	resp, err := testClient.Do(req)
+	assert.NoError(t, err)
+	assert.Equal(t, 200, resp.StatusCode)
+	assert.Equal(t, testAgentWebID, resp.Header.Get("User"))
+	assert.Equal(t, origin, resp.Header.Get("Access-Control-Allow-Origin"))
 }
 
 func TestProxyNotAuthenticated(t *testing.T) {

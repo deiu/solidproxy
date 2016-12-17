@@ -1,7 +1,8 @@
 package solidproxy
 
-var (
-	SERVER_VERSION = "v2.0.0"
+const (
+	ServerVersion = "v2.1.0"
+	ServerName    = "SolidProxy"
 )
 
 type ServerConfig struct {
@@ -21,10 +22,18 @@ func NewServerConfig() *ServerConfig {
 		InsecureSkipVerify: false,
 		Port:               "3129",
 		EnableTLS:          false,
-		Version:            SERVER_VERSION,
+		Version:            ServerVersion,
 	}
 }
 
-func GetVersion() string {
-	return SERVER_VERSION
+func GetServerVersion() string {
+	return ServerVersion
+}
+
+func GetServerName() string {
+	return ServerName
+}
+
+func GetServerFullName() string {
+	return ServerName + "-" + ServerVersion
 }
