@@ -63,6 +63,7 @@ func MockServer() http.Handler {
 	}))
 
 	handler.Handle("/200", http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		setOrigin(w, req)
 		w.Header().Set("User", req.Header.Get("User"))
 		w.WriteHeader(200)
 		w.Write([]byte("foo"))
@@ -70,6 +71,7 @@ func MockServer() http.Handler {
 	}))
 
 	handler.Handle("/method", http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		setOrigin(w, req)
 		w.WriteHeader(200)
 		w.Write([]byte(req.Method))
 		return
