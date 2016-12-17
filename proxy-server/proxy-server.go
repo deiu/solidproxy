@@ -24,6 +24,15 @@ func main() {
 	// logger
 	logger := log.New(ioutil.Discard, "", 0)
 
+	// Try to recover in case of panics
+	defer func() {
+		if rec := recover(); rec != nil {
+			logger.Println(rec)
+			return
+		}
+	}()
+
+	// Read config from environment
 	if len(os.Getenv("SOLIDPROXY_VERBOSE")) > 0 {
 		configProxy.Verbose = true // default= false
 		configAgent.Verbose = true // default= false
