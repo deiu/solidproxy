@@ -9,70 +9,81 @@ import (
 	"crypto/x509/pkix"
 	"encoding/asn1"
 	"encoding/pem"
+	"errors"
 	"fmt"
+	"log"
 	"math/big"
 	"net/http"
 	"time"
 )
 
+type Agent struct {
+	WebID   string
+	Profile string
+	Cert    *tls.Certificate
+	Key     *rsa.PrivateKey
+	Log     *log.Logger
+}
+
 var (
-	agentProfile   string
-	webidTlsClient *http.Client
-	agentCert      *tls.Certificate
-	privKey        *rsa.PrivateKey
-
-	err error
-
+	err            error
 	subjectAltName = []int{2, 5, 29, 17}
 	notBefore      = time.Date(2000, 1, 1, 0, 0, 0, 0, time.UTC)
 	notAfter       = time.Date(2049, 12, 31, 23, 59, 59, 0, time.UTC)
 	rsaBits        = 2048
 )
 
-func InitAgentWebID(conf *ServerConfig) error {
+func NewAgent(uri string) (*Agent, error) {
+	agent := &Agent{}
+	if len(uri) == 0 {
+		return agent, errors.New("You must provide an URI for the agent's WebID")
+	}
+	agent.WebID = uri
+	return agent, nil
+}
+
+func NewAgentLocal(uri string, bits ...int) (*Agent, error) {
+	agent, err := NewAgent(uri)
+	if err != nil {
+		return agent, err
+	}
+
+	keyLen := rsaBits
+	if len(bits) > 0 {
+		keyLen = bits[0]
+	}
+
 	// Create a new keypair
-	privKey, E, N, err := NewRSAKey()
+	privKey, E, N, err := NewRSAKey(keyLen)
 	if err != nil {
-		return err
+		return agent, err
 	}
+	agent.Key = privKey
 
-	agentProfile = NewAgentProfile(E, N)
-	agentCert, err = NewRSAcert(conf.Agent, "Solid Proxy Agent", privKey)
+	agent.Profile = NewAgentProfile(E, N)
+	agent.Cert, err = NewRSAcert(uri, "Solid Agent", privKey)
 
-	return nil
+	return agent, nil
 }
 
-func NewAgentClient(cert *tls.Certificate) *http.Client {
-	return &http.Client{
-		Transport: &http.Transport{
-			TLSClientConfig: &tls.Config{
-				Certificates:       []tls.Certificate{*cert},
-				InsecureSkipVerify: true,
-			},
-		},
-	}
-}
-
-func NewRSAKey() (p *rsa.PrivateKey, e, n string, err error) {
-	p, err = rsa.GenerateKey(rand.Reader, rsaBits)
+func NewRSAKey(bits int) (*rsa.PrivateKey, string, string, error) {
+	var e, n string
+	p, err := rsa.GenerateKey(rand.Reader, bits)
 	if err != nil {
-		Logger.Println(err.Error())
-		return
+		return p, e, n, err
 	}
 	e = fmt.Sprintf("%d", p.PublicKey.E)
 	n = fmt.Sprintf("%x", p.PublicKey.N)
 
-	return
+	return p, e, n, err
 }
 
-// WebIDHandler uses a closure with the signature func(http.ResponseWriter,
-// *http.Request). It sets extra headers that are needed for serving the
-// agent's WebID profile document
-func WebIDHandler(w http.ResponseWriter, req *http.Request) {
-	Logger.Printf("New request for agent WebID from: %+v\n", req.RemoteAddr)
+// Handler function handles requests for the agent's WebID profile document
+func (agent *Agent) Handler(w http.ResponseWriter, req *http.Request) {
+	agent.Log.Printf("New request for agent WebID from: %+v\n", req.RemoteAddr)
 	w.Header().Set("Content-Type", "text/turtle")
 	w.WriteHeader(200)
-	w.Write([]byte(agentProfile))
+	w.Write([]byte(agent.Profile))
 }
 
 // NewAgentProfile returns a new WebID profile document for the agent

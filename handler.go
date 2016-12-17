@@ -7,16 +7,9 @@ import (
 	"net/http"
 	"os"
 	"sync"
-
-	"github.com/labstack/echo"
-	"github.com/labstack/echo/middleware"
 )
 
 var (
-	Logger             *log.Logger
-	agentWebID         string
-	insecureSkipVerify bool
-
 	cookies  = map[string]map[string][]*http.Cookie{}
 	cookiesL = new(sync.RWMutex)
 )
@@ -30,71 +23,38 @@ func InitLogger(config *ServerConfig) *log.Logger {
 }
 
 // NewServer creates a new server handler
-func NewProxyHandler(config *ServerConfig) *echo.Echo {
-	Logger = InitLogger(config)
-	Logger.Println("\n---- starting proxy server ----")
-	Logger.Printf("config: %#v\n", config)
+func NewProxyHandler(config *ServerConfig, proxy *Proxy) http.Handler {
+	logger := InitLogger(config)
+	logger.Println("\n---- starting proxy server ----")
+	logger.Printf("config: %#v\n", config)
 
-	// set local variables used by the proxy client
-	agentWebID = config.Agent
-	insecureSkipVerify = config.InsecureSkipVerify
+	proxy.Log = logger
 
 	// Create new handler
-	handler := echo.New()
-
-	// Recover in case of panics
-	handler.Use(middleware.Recover())
+	handler := http.NewServeMux()
 
 	// ****** Routes Middleware ******
 
 	// Proxy handler
 	// The proxy handler uses the standard ResponseWriter and Request objects
-	handler.Any("/proxy", echo.WrapHandler(http.HandlerFunc(ProxyHandler)))
-	// Catch all other routes with 501 - Not Implemented
-	handler.Any("/*", func(c echo.Context) error {
-		return c.String(http.StatusNotImplemented, "Not implemented")
-	})
+	handler.HandleFunc("/proxy", proxy.Handler)
 
 	return handler
 }
 
-func NewAgentHandler(config *ServerConfig) *echo.Echo {
-	Logger = InitLogger(config)
-	Logger.Println("\n---- starting agent server ----")
-	Logger.Printf("config: %#v\n", config)
-
-	// Init
-	err := InitAgentWebID(config)
-	if err != nil {
-		panic(err)
-	}
+func NewAgentHandler(config *ServerConfig, agent *Agent) http.Handler {
+	logger := InitLogger(config)
+	logger.Println("\n---- starting agent server ----")
+	logger.Printf("config: %#v\n", config)
+	agent.Log = logger
 
 	// Create new handler
-	handler := echo.New()
-
-	// Recover in case of panics
-	handler.Use(middleware.Recover())
+	handler := http.NewServeMux()
 
 	// Agent's WebID handler
-	handler.OPTIONS("/webid", echo.WrapHandler(http.HandlerFunc(WebIDHandler)))
-	handler.HEAD("/webid", echo.WrapHandler(http.HandlerFunc(WebIDHandler)))
-	handler.GET("/webid", echo.WrapHandler(http.HandlerFunc(WebIDHandler)))
-	// Catch all other routes with 501 - Not Implemented
-	handler.Any("/*", func(c echo.Context) error {
-		return c.String(http.StatusNotImplemented, "Not implemented")
-	})
+	handler.HandleFunc("/webid", agent.Handler)
 
 	return handler
-}
-
-func NewClient(skip bool) *http.Client {
-	return &http.Client{
-		Transport: &http.Transport{
-			TLSClientConfig: &tls.Config{
-				InsecureSkipVerify: skip,
-			},
-		},
-	}
 }
 
 func NewTLSConfig(config *ServerConfig) (*tls.Config, error) {

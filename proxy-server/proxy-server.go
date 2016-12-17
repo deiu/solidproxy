@@ -7,7 +7,6 @@ import (
 	"net/http"
 	"os"
 
-	"github.com/labstack/echo"
 	"github.com/solid/solidproxy"
 )
 
@@ -22,12 +21,21 @@ func main() {
 	configAgent.Port = "3200" // set default for agent
 
 	// logger
-	solidproxy.Logger = log.New(ioutil.Discard, "", 0)
+	logger := log.New(ioutil.Discard, "", 0)
 
+	// Try to recover in case of panics
+	defer func() {
+		if rec := recover(); rec != nil {
+			logger.Println(rec)
+			return
+		}
+	}()
+
+	// Read config from environment
 	if len(os.Getenv("SOLIDPROXY_VERBOSE")) > 0 {
 		configProxy.Verbose = true // default= false
 		configAgent.Verbose = true // default= false
-		solidproxy.Logger = log.New(os.Stderr, debugPrefix, debugFlags)
+		logger = log.New(os.Stderr, debugPrefix, debugFlags)
 	}
 	if len(os.Getenv("SOLIDPROXY_INSECURE")) > 0 {
 		configProxy.InsecureSkipVerify = true // default= false
@@ -59,9 +67,19 @@ func main() {
 		configAgent.Port = os.Getenv("SOLIDPROXY_AGENTPORT") // default= :3200
 	}
 
+	// Create new agent
+	agent, err := solidproxy.NewAgentLocal(configAgent.Agent)
+	if err != nil {
+		println("Cannot create new agent:", err.Error())
+		return
+	}
+	agent.Log = logger
+	proxy := solidproxy.NewProxy(agent, configAgent.InsecureSkipVerify)
+	proxy.Log = logger
+
 	// Create handlers
-	agentHandler := solidproxy.NewAgentHandler(configAgent)
-	proxyHandler := solidproxy.NewProxyHandler(configProxy)
+	agentHandler := solidproxy.NewAgentHandler(configAgent, agent)
+	proxyHandler := solidproxy.NewProxyHandler(configProxy, proxy)
 
 	// Create servers
 	agentServer, err := NewServer(agentHandler, configAgent)
@@ -77,11 +95,11 @@ func main() {
 
 	// Start servers
 	println("\nStarting SolidProxy", solidproxy.GetVersion())
-	go agentHandler.StartServer(agentServer)
-	proxyHandler.StartServer(proxyServer)
+	go agentServer.ListenAndServe()
+	proxyServer.ListenAndServe()
 }
 
-func NewServer(handler *echo.Echo, config *solidproxy.ServerConfig) (*http.Server, error) {
+func NewServer(handler http.Handler, config *solidproxy.ServerConfig) (*http.Server, error) {
 	// Create proxy server listener and set config values
 	var err error
 	s := &http.Server{

@@ -14,29 +14,25 @@ var (
 	testProxyServer  *httptest.Server
 	testAgentServer  *httptest.Server
 	testClient       *http.Client
+	testAgentWebID   string
 )
 
 func init() {
 	var err error
+	skipVerify := true
 
-	testAgentWebID := "https://example.com/webid#me"
-
-	// ** PROXY **
-	proxyConf := NewServerConfig()
-	proxyConf.InsecureSkipVerify = true
-	proxyConf.Agent = testAgentWebID
-	proxyServer := NewProxyHandler(proxyConf)
-
-	// testProxyServer
-	testProxyServer = httptest.NewServer(proxyServer)
-	testProxyServer.URL = strings.Replace(testProxyServer.URL, "127.0.0.1", "localhost", 1)
+	testAgentWebID = "https://example.com/webid#me"
 
 	// ** AGENT **
+	agent, err := NewAgentLocal(testAgentWebID)
+	if err != nil {
+		panic(err)
+	}
 	agentConf := NewServerConfig()
 	agentConf.TLSKey = "test_key.pem"
 	agentConf.TLSCert = "test_cert.pem"
 	agentConf.Agent = testAgentWebID
-	agentServer := NewAgentHandler(agentConf)
+	agentServer := NewAgentHandler(agentConf, agent)
 	// testProxyServer
 	testAgentServer = httptest.NewUnstartedServer(agentServer)
 	testAgentServer.TLS, err = NewTLSConfig(agentConf)
@@ -45,6 +41,17 @@ func init() {
 	}
 	testAgentServer.StartTLS()
 	testAgentServer.URL = strings.Replace(testAgentServer.URL, "127.0.0.1", "localhost", 1)
+
+	// ** PROXY **
+	proxy := NewProxy(agent, skipVerify)
+	proxyConf := NewServerConfig()
+	proxyConf.InsecureSkipVerify = skipVerify
+	proxyConf.Agent = testAgentWebID
+	proxyServer := NewProxyHandler(proxyConf, proxy)
+
+	// testProxyServer
+	testProxyServer = httptest.NewServer(proxyServer)
+	testProxyServer.URL = strings.Replace(testProxyServer.URL, "127.0.0.1", "localhost", 1)
 
 	// ** CLIENT **
 	// testClient
@@ -55,18 +62,18 @@ func TestServerVersion(t *testing.T) {
 	assert.Equal(t, SERVER_VERSION, GetVersion())
 }
 
-func TestRouteNotImplemented(t *testing.T) {
+func TestRouteDoesNotExist(t *testing.T) {
 	req, err := http.NewRequest("GET", testAgentServer.URL, nil)
 	assert.NoError(t, err)
 	resp, err := testClient.Do(req)
 	assert.NoError(t, err)
-	assert.Equal(t, 501, resp.StatusCode)
+	assert.Equal(t, 404, resp.StatusCode)
 
 	req, err = http.NewRequest("GET", testProxyServer.URL, nil)
 	assert.NoError(t, err)
 	resp, err = testClient.Do(req)
 	assert.NoError(t, err)
-	assert.Equal(t, 501, resp.StatusCode)
+	assert.Equal(t, 404, resp.StatusCode)
 }
 
 func TestRouteWebID(t *testing.T) {

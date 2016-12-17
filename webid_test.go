@@ -12,28 +12,50 @@ import (
 )
 
 func TestNewRSAKey(t *testing.T) {
-	p, e, n, err := NewRSAKey()
+	p, e, n, err := NewRSAKey(rsaBits)
 	assert.NoError(t, err)
 	assert.IsType(t, new(rsa.PrivateKey), p)
 	assert.Equal(t, fmt.Sprintf("%d", p.PublicKey.E), e)
 	assert.NotEmpty(t, fmt.Sprintf("%x", p.PublicKey.N), n)
 }
 
-func TestNewAgentProfile(t *testing.T) {
-	// p := NewAgentProfile()
+func TestNewRSAKeyError(t *testing.T) {
+	_, _, _, err := NewRSAKey(0)
+	assert.Error(t, err)
+}
 
+func TestNewAgent(t *testing.T) {
+	agent, err := NewAgent(testAgentWebID)
+	assert.NoError(t, err)
+	assert.Equal(t, agent.WebID, testAgentWebID)
+}
+
+func TestNewAgentEmptyURI(t *testing.T) {
+	agent, err := NewAgent("")
+	assert.Error(t, err)
+	assert.Empty(t, agent.WebID)
+}
+
+func TestNewAgentLocalEmptyURI(t *testing.T) {
+	agent, err := NewAgentLocal("")
+	assert.Error(t, err)
+	assert.Empty(t, agent.WebID)
+}
+
+func TestNewAgentLocalBadKey(t *testing.T) {
+	_, err := NewAgentLocal(testAgentWebID, 0)
+	assert.Error(t, err)
 }
 
 func TestNewRSAcert(t *testing.T) {
-	agentW := "https://agent.com/webid#me"
-	p, _, _, err := NewRSAKey()
+	p, _, _, err := NewRSAKey(rsaBits)
 	assert.NoError(t, err)
-	cert, err := NewRSAcert(agentW, "Solid Proxy Agent", p)
+	cert, err := NewRSAcert(testAgentWebID, "Solid Proxy Agent", p)
 	assert.NoError(t, err)
 
 	webid, err := WebIDFromCert(cert.Certificate[0])
 	assert.NoError(t, err)
-	assert.Equal(t, "URI: "+agentW, webid)
+	assert.Equal(t, "URI: "+testAgentWebID, webid)
 }
 
 func WebIDFromCert(cert []byte) (string, error) {
