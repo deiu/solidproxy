@@ -123,6 +123,17 @@ func TestProxyMethodOPTIONS(t *testing.T) {
 	assert.Equal(t, "OPTIONS", string(body))
 }
 
+func TestProxyOrigin(t *testing.T) {
+	origin := "example.org"
+	req, err := http.NewRequest("GET", testProxyServer.URL+"/proxy?uri="+testMockServer.URL+"/200", nil)
+	assert.NoError(t, err)
+	req.Header.Set("Origin", origin)
+	resp, err := testClient.Do(req)
+	assert.NoError(t, err)
+	assert.Equal(t, 200, resp.StatusCode)
+	assert.Equal(t, origin, resp.Header.Get("Access-Control-Allow-Origin"))
+}
+
 func TestProxyNotAuthenticated(t *testing.T) {
 	req, err := http.NewRequest("GET", testProxyServer.URL+"/proxy?uri="+testMockServer.URL+"/200", nil)
 	assert.NoError(t, err)

@@ -36,6 +36,8 @@ func NewProxy(agent *Agent, skip bool) *Proxy {
 
 func (p *Proxy) Handler(w http.ResponseWriter, req *http.Request) {
 	p.Log.Println("New request from:", req.RemoteAddr, "for URI:", req.URL.String())
+	// Log the time it takes to finish the request (for debugging)
+	defer TimeTrack(time.Now(), req.Method+" operation", p.Log)
 
 	uri := req.FormValue("uri")
 	if len(uri) == 0 {
@@ -66,7 +68,9 @@ func (p *Proxy) Handler(w http.ResponseWriter, req *http.Request) {
 	// no error should exist at this point, it was caught earlier
 	// by url.Parse and the server handler
 	plain, _ := http.NewRequest(req.Method, req.URL.String(), req.Body)
-	// create a new client
+	plain.Header.Set("User-Agent", SERVER_NAME+"-"+SERVER_VERSION)
+	// also copy headers
+	CopyHeaders(req.Header, plain.Header)
 
 	r, err := p.HttpClient.Do(plain)
 	if err != nil {
@@ -78,11 +82,12 @@ func (p *Proxy) Handler(w http.ResponseWriter, req *http.Request) {
 
 	// Retry with server credentials if authentication is required
 	if r.StatusCode == 401 && len(user) > 0 && p.HttpAgentClient != nil {
-		// Log the time it takes to finish the request (for debugging)
-		defer TimeTrack(time.Now(), req.Method+" operation", p.Log)
 		// build new response
 		authenticated, err := http.NewRequest(req.Method, req.URL.String(), req.Body)
 		authenticated.Header.Set("On-Behalf-Of", user)
+		// also copy headers
+		CopyHeaders(req.Header, authenticated.Header)
+
 		var solutionMsg string
 		var client *http.Client
 		// Retry the request
@@ -97,6 +102,7 @@ func (p *Proxy) Handler(w http.ResponseWriter, req *http.Request) {
 		}
 		// Close the previous response to reuse the connection
 		r.Body.Close()
+
 		r, err = client.Do(authenticated)
 		if err != nil {
 			p.Log.Println("Request execution error on auth retry:", err)
@@ -129,13 +135,13 @@ func (p *Proxy) Handler(w http.ResponseWriter, req *http.Request) {
 	w.Header().Set("Access-Control-Allow-Credentials", "true")
 	w.Header().Set("Access-Control-Expose-Headers", "User, Triples, Location, Origin, Link, Vary, Last-Modified, Content-Length")
 	w.Header().Set("Access-Control-Max-Age", "60")
+	origin := req.Header.Get("Origin")
+	if len(origin) > 0 {
+		w.Header().Set("Access-Control-Allow-Origin", origin)
+	}
 
 	// copy headers
-	for key, values := range r.Header {
-		for _, value := range values {
-			w.Header().Set(key, value)
-		}
-	}
+	CopyHeaders(r.Header, w.Header())
 
 	w.WriteHeader(r.StatusCode)
 	// r.Body will be empty at worst, so it should never trigger an error
@@ -144,6 +150,14 @@ func (p *Proxy) Handler(w http.ResponseWriter, req *http.Request) {
 
 	p.Log.Println("Received public data with status HTTP", r.StatusCode)
 	return
+}
+
+func CopyHeaders(from http.Header, to http.Header) {
+	for key, values := range from {
+		for _, value := range values {
+			to.Set(key, value)
+		}
+	}
 }
 
 func NewClient(skip bool) *http.Client {
