@@ -42,14 +42,19 @@ func NewAgent(uri string) (*Agent, error) {
 	return agent, nil
 }
 
-func NewAgentLocal(uri string) (*Agent, error) {
+func NewAgentLocal(uri string, bits ...int) (*Agent, error) {
 	agent, err := NewAgent(uri)
 	if err != nil {
 		return agent, err
 	}
 
+	keyLen := rsaBits
+	if len(bits) > 0 {
+		keyLen = bits[0]
+	}
+
 	// Create a new keypair
-	privKey, E, N, err := NewRSAKey()
+	privKey, E, N, err := NewRSAKey(keyLen)
 	if err != nil {
 		return agent, err
 	}
@@ -61,9 +66,9 @@ func NewAgentLocal(uri string) (*Agent, error) {
 	return agent, nil
 }
 
-func NewRSAKey() (*rsa.PrivateKey, string, string, error) {
+func NewRSAKey(bits int) (*rsa.PrivateKey, string, string, error) {
 	var e, n string
-	p, err := rsa.GenerateKey(rand.Reader, rsaBits)
+	p, err := rsa.GenerateKey(rand.Reader, bits)
 	if err != nil {
 		return p, e, n, err
 	}

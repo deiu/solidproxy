@@ -62,18 +62,18 @@ func TestServerVersion(t *testing.T) {
 	assert.Equal(t, SERVER_VERSION, GetVersion())
 }
 
-func TestRouteNotImplemented(t *testing.T) {
+func TestRouteDoesNotExist(t *testing.T) {
 	req, err := http.NewRequest("GET", testAgentServer.URL, nil)
 	assert.NoError(t, err)
 	resp, err := testClient.Do(req)
 	assert.NoError(t, err)
-	assert.Equal(t, 501, resp.StatusCode)
+	assert.Equal(t, 404, resp.StatusCode)
 
 	req, err = http.NewRequest("GET", testProxyServer.URL, nil)
 	assert.NoError(t, err)
 	resp, err = testClient.Do(req)
 	assert.NoError(t, err)
-	assert.Equal(t, 501, resp.StatusCode)
+	assert.Equal(t, 404, resp.StatusCode)
 }
 
 func TestRouteWebID(t *testing.T) {

@@ -7,7 +7,6 @@ import (
 	"net/http"
 	"os"
 
-	"github.com/labstack/echo"
 	"github.com/solid/solidproxy"
 )
 
@@ -96,11 +95,11 @@ func main() {
 
 	// Start servers
 	println("\nStarting SolidProxy", solidproxy.GetVersion())
-	go agentHandler.StartServer(agentServer)
-	proxyHandler.StartServer(proxyServer)
+	go agentServer.ListenAndServe()
+	proxyServer.ListenAndServe()
 }
 
-func NewServer(handler *echo.Echo, config *solidproxy.ServerConfig) (*http.Server, error) {
+func NewServer(handler http.Handler, config *solidproxy.ServerConfig) (*http.Server, error) {
 	// Create proxy server listener and set config values
 	var err error
 	s := &http.Server{

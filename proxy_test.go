@@ -172,7 +172,7 @@ func TestProxyBadRequest(t *testing.T) {
 	assert.NoError(t, err)
 	resp, err := testClient.Do(req)
 	assert.NoError(t, err)
-	assert.Equal(t, 405, resp.StatusCode)
+	assert.Equal(t, 400, resp.StatusCode)
 }
 
 func TestProxyNoSkipVerify(t *testing.T) {

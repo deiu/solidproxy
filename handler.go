@@ -7,9 +7,6 @@ import (
 	"net/http"
 	"os"
 	"sync"
-
-	"github.com/labstack/echo"
-	"github.com/labstack/echo/middleware"
 )
 
 var (
@@ -26,7 +23,7 @@ func InitLogger(config *ServerConfig) *log.Logger {
 }
 
 // NewServer creates a new server handler
-func NewProxyHandler(config *ServerConfig, proxy *Proxy) *echo.Echo {
+func NewProxyHandler(config *ServerConfig, proxy *Proxy) http.Handler {
 	logger := InitLogger(config)
 	logger.Println("\n---- starting proxy server ----")
 	logger.Printf("config: %#v\n", config)
@@ -34,44 +31,28 @@ func NewProxyHandler(config *ServerConfig, proxy *Proxy) *echo.Echo {
 	proxy.Log = logger
 
 	// Create new handler
-	handler := echo.New()
-
-	// Recover in case of panics
-	handler.Use(middleware.Recover())
+	handler := http.NewServeMux()
 
 	// ****** Routes Middleware ******
 
 	// Proxy handler
 	// The proxy handler uses the standard ResponseWriter and Request objects
-	handler.Any("/proxy", echo.WrapHandler(http.HandlerFunc(proxy.Handler)))
-	// Catch all other routes with 501 - Not Implemented
-	handler.Any("/*", func(c echo.Context) error {
-		return c.String(http.StatusNotImplemented, "Not implemented")
-	})
+	handler.HandleFunc("/proxy", proxy.Handler)
 
 	return handler
 }
 
-func NewAgentHandler(config *ServerConfig, agent *Agent) *echo.Echo {
+func NewAgentHandler(config *ServerConfig, agent *Agent) http.Handler {
 	logger := InitLogger(config)
 	logger.Println("\n---- starting agent server ----")
 	logger.Printf("config: %#v\n", config)
 	agent.Log = logger
 
 	// Create new handler
-	handler := echo.New()
-
-	// Recover in case of panics
-	handler.Use(middleware.Recover())
+	handler := http.NewServeMux()
 
 	// Agent's WebID handler
-	handler.OPTIONS("/webid", echo.WrapHandler(http.HandlerFunc(agent.Handler)))
-	handler.HEAD("/webid", echo.WrapHandler(http.HandlerFunc(agent.Handler)))
-	handler.GET("/webid", echo.WrapHandler(http.HandlerFunc(agent.Handler)))
-	// Catch all other routes with 501 - Not Implemented
-	handler.Any("/*", func(c echo.Context) error {
-		return c.String(http.StatusNotImplemented, "Not implemented")
-	})
+	handler.HandleFunc("/webid", agent.Handler)
 
 	return handler
 }
