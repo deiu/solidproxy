@@ -113,8 +113,13 @@ func main() {
 	// Init logger
 	logger := log.New(os.Stderr, "[debug] ", log.Flags()|log.Lshortfile)
 
-	// create a new agent object with its corresponding key pair and profile
-	// document and serve it under /agent
+	// Next we create a new (local) agent object with its corresponding key
+	// pair and profile document and serve it under /agent
+	// Alternatively, we can create a "remote" agent to which we need to 
+	// provide a cert (tls.Certificate) you can load from somewhere:
+	// agent, err := solidproxy.NewAgent("https://example.org/agent#me")
+	// agent.Cert = someTLScert
+	
 	agent, err := solidproxy.NewAgentLocal("http://localhost:8080/agent#me")
 	if err != nil {
 		log.Println("Error creating new agent:", err.Error())
@@ -126,18 +131,19 @@ func main() {
 	// Skip verifying trust chain for certificates?
 	// Use true when dealing with self-signed certs (testing, etc.)
 	insecureSkipVerify := true
-	// create a new proxy object
+	// Create a new proxy object
 	proxy := solidproxy.NewProxy(agent, insecureSkipVerify)
 	// assign logger
 	proxy.Log = logger
 
-	// init handlers
+	// Prepare proxy handler and serve it at http://localhost:8080/proxy
 	handleProxy := http.HandlerFunc(proxy.Handler)
-	handleAgent := http.HandlerFunc(agent.Handler)
+	mux.Handle("/proxy", handleProxy) 
 
-	// set handlers
-	mux.Handle("/proxy", handleProxy) // http://localhost:8080/proxy
-	mux.Handle("/agent", handleAgent) // http://localhost:8080/agent
+	// The handleAgent is only needed if you plan to serve the agent's WebID
+	// profile yourself; it will be available at http://localhost:8080/agent
+	handleAgent := http.HandlerFunc(agent.Handler)
+	mux.Handle("/agent", handleAgent) 
 
 	logger.Println("Listening...")
 	http.ListenAndServe(":8080", mux)
