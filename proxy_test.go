@@ -1,12 +1,12 @@
 package solidproxy
 
 import (
+	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 
-	"github.com/labstack/echo"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -23,35 +23,104 @@ func init() {
 	testMockServer.URL = strings.Replace(testMockServer.URL, "127.0.0.1", "localhost", 1)
 }
 
-func MockServer() *echo.Echo {
+func MockServer() http.Handler {
 	// Create new handler
-	handler := echo.New()
-
-	handler.GET("/401", func(c echo.Context) error {
-		req := c.Request()
+	handler := http.NewServeMux()
+	handler.Handle("/401", http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 		user := req.Header.Get("On-Behalf-Of")
 		if len(user) == 0 {
-			return c.String(401, "Authentication required")
+			w.WriteHeader(401)
+			w.Write([]byte("Authentication required"))
+			return
 		}
 		if len(req.Cookies()) > 0 {
 			cc := req.Cookies()[0]
 			if cc.Name != "sample" && cc.Value != "sample" {
-				return c.String(403, "Bad cookie credentials")
+				w.WriteHeader(403)
+				w.Write([]byte("Bad cookie credentials"))
+				return
 			}
-			return c.String(200, "foo")
+			w.WriteHeader(200)
+			w.Write([]byte("foo"))
+			return
 		}
 
 		// set cookie
 		cookie := &http.Cookie{Name: "sample", Value: "sample", HttpOnly: false}
-		http.SetCookie(c.Response().Writer(), cookie)
-		return c.String(200, "foo")
-	})
+		http.SetCookie(w, cookie)
+		w.WriteHeader(200)
+		w.Write([]byte("foo"))
+		return
+	}))
 
-	handler.GET("/200", func(c echo.Context) error {
-		return c.String(200, "foo")
-	})
+	handler.Handle("/200", http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		w.WriteHeader(200)
+		w.Write([]byte("foo"))
+		return
+	}))
+
+	handler.Handle("/method", http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		w.WriteHeader(200)
+		w.Write([]byte(req.Method))
+		return
+	}))
 
 	return handler
+}
+
+func TestProxyMethodPOST(t *testing.T) {
+	req, err := http.NewRequest("POST", testProxyServer.URL+"/proxy?uri="+testMockServer.URL+"/method", nil)
+	assert.NoError(t, err)
+	resp, err := testClient.Do(req)
+	assert.NoError(t, err)
+	assert.Equal(t, 200, resp.StatusCode)
+	body, err := ioutil.ReadAll(resp.Body)
+	resp.Body.Close()
+	assert.Equal(t, "POST", string(body))
+}
+
+func TestProxyMethodPUT(t *testing.T) {
+	req, err := http.NewRequest("PUT", testProxyServer.URL+"/proxy?uri="+testMockServer.URL+"/method", nil)
+	assert.NoError(t, err)
+	resp, err := testClient.Do(req)
+	assert.NoError(t, err)
+	assert.Equal(t, 200, resp.StatusCode)
+	body, err := ioutil.ReadAll(resp.Body)
+	resp.Body.Close()
+	assert.Equal(t, "PUT", string(body))
+}
+
+func TestProxyMethodPATCH(t *testing.T) {
+	req, err := http.NewRequest("PATCH", testProxyServer.URL+"/proxy?uri="+testMockServer.URL+"/method", nil)
+	assert.NoError(t, err)
+	resp, err := testClient.Do(req)
+	assert.NoError(t, err)
+	assert.Equal(t, 200, resp.StatusCode)
+	body, err := ioutil.ReadAll(resp.Body)
+	resp.Body.Close()
+	assert.Equal(t, "PATCH", string(body))
+}
+
+func TestProxyMethodDELETE(t *testing.T) {
+	req, err := http.NewRequest("DELETE", testProxyServer.URL+"/proxy?uri="+testMockServer.URL+"/method", nil)
+	assert.NoError(t, err)
+	resp, err := testClient.Do(req)
+	assert.NoError(t, err)
+	assert.Equal(t, 200, resp.StatusCode)
+	body, err := ioutil.ReadAll(resp.Body)
+	resp.Body.Close()
+	assert.Equal(t, "DELETE", string(body))
+}
+
+func TestProxyMethodOPTIONS(t *testing.T) {
+	req, err := http.NewRequest("OPTIONS", testProxyServer.URL+"/proxy?uri="+testMockServer.URL+"/method", nil)
+	assert.NoError(t, err)
+	resp, err := testClient.Do(req)
+	assert.NoError(t, err)
+	assert.Equal(t, 200, resp.StatusCode)
+	body, err := ioutil.ReadAll(resp.Body)
+	resp.Body.Close()
+	assert.Equal(t, "OPTIONS", string(body))
 }
 
 func TestProxyNotAuthenticated(t *testing.T) {
