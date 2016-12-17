@@ -94,7 +94,7 @@ func main() {
 	}
 
 	// Start servers
-	println("\nStarting SolidProxy", solidproxy.GetVersion())
+	println("\nStarting server --", solidproxy.GetServerFullName())
 	go agentServer.ListenAndServe()
 	proxyServer.ListenAndServe()
 }

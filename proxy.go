@@ -68,7 +68,7 @@ func (p *Proxy) Handler(w http.ResponseWriter, req *http.Request) {
 	// no error should exist at this point, it was caught earlier
 	// by url.Parse and the server handler
 	plain, _ := http.NewRequest(req.Method, req.URL.String(), req.Body)
-	plain.Header.Set("User-Agent", SERVER_NAME+"-"+SERVER_VERSION)
+	plain.Header.Set("User-Agent", GetServerFullName())
 	// also copy headers
 	CopyHeaders(req.Header, plain.Header)
 
@@ -84,6 +84,7 @@ func (p *Proxy) Handler(w http.ResponseWriter, req *http.Request) {
 	if r.StatusCode == 401 && len(user) > 0 && p.HttpAgentClient != nil {
 		// build new response
 		authenticated, err := http.NewRequest(req.Method, req.URL.String(), req.Body)
+		authenticated.Header.Set("User-Agent", GetServerFullName())
 		authenticated.Header.Set("On-Behalf-Of", user)
 		// also copy headers
 		CopyHeaders(req.Header, authenticated.Header)
