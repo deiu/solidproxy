@@ -14,6 +14,7 @@ import (
 	"log"
 	"math/big"
 	"net/http"
+	"strings"
 	"time"
 )
 
@@ -34,7 +35,9 @@ var (
 )
 
 func NewAgent(uri string) (*Agent, error) {
-	agent := &Agent{}
+	agent := &Agent{
+		Log: InitLogger(false),
+	}
 	if len(uri) == 0 {
 		return agent, errors.New("You must provide an URI for the agent's WebID")
 	}
@@ -154,4 +157,55 @@ func NewRSAcert(uri string, name string, priv *rsa.PrivateKey) (*tls.Certificate
 	}
 
 	return &cert, nil
+}
+
+func ExtractSANValue(cert *x509.Certificate) (string, error) {
+	for _, x := range cert.Extensions {
+		if x.Id.Equal(subjectAltName) {
+			v := asn1.RawValue{}
+			_, err = asn1.Unmarshal(x.Value, &v)
+			if err != nil {
+				return "", err
+			}
+			sanUri := string(v.Bytes[2:])
+			if strings.HasPrefix(sanUri, "URI:") {
+				sanUri = strings.TrimSpace(sanUri[4:])
+			}
+			return sanUri, nil
+
+		}
+	}
+	return "", nil
+}
+
+func WebIDFromBytes(cert []byte) (string, error) {
+	parsed, err := x509.ParseCertificate(cert)
+	if err != nil {
+		return "", err
+	}
+
+	return ExtractSANValue(parsed)
+}
+
+func WebIDFromCert(cert *tls.Certificate) (string, error) {
+	parsed, err := x509.ParseCertificate(cert.Certificate[0])
+	if err != nil {
+		return "", err
+	}
+
+	return ExtractSANValue(parsed)
+}
+
+func WebIDFromReq(req *http.Request) (string, error) {
+	t := req.TLS
+
+	if t == nil || !t.HandshakeComplete {
+		return "", errors.New("Not a TLS connection or TLS handshake failed")
+	}
+
+	if len(t.PeerCertificates) < 1 {
+		return "", errors.New("No client certificate found in the TLS request!")
+	}
+
+	return ExtractSANValue(t.PeerCertificates[0])
 }

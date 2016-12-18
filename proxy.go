@@ -25,10 +25,11 @@ func NewProxy(agent *Agent, skip bool) *Proxy {
 	proxy := &Proxy{
 		HttpClient: NewClient(skip),
 		Agent:      agent,
+		Log:        InitLogger(false),
 	}
 
 	if agent.Cert != nil {
-		proxy.HttpAgentClient = NewAgentClient(agent.Cert, skip)
+		proxy.HttpAgentClient = agent.NewAgentClient(skip)
 	}
 
 	return proxy
@@ -62,15 +63,16 @@ func (p *Proxy) Handler(w http.ResponseWriter, req *http.Request) {
 	// get user
 	user := req.Header.Get("User")
 
-	p.Log.Println("Proxying request for URI:", req.URL, "and user:", user)
+	p.Log.Println("Proxying request for URI:", req.URL, "and user:", user, "using Agent:", p.Agent.WebID)
 
 	// build new response
 	// no error should exist at this point, it was caught earlier
 	// by url.Parse and the server handler
 	plain, _ := http.NewRequest(req.Method, req.URL.String(), req.Body)
-	plain.Header.Set("User-Agent", GetServerFullName())
-	// also copy headers
+	// copy headers
 	CopyHeaders(req.Header, plain.Header)
+	// overwrite User Agent
+	plain.Header.Set("User-Agent", GetServerFullName())
 
 	r, err := p.HttpClient.Do(plain)
 	if err != nil {
@@ -82,29 +84,29 @@ func (p *Proxy) Handler(w http.ResponseWriter, req *http.Request) {
 
 	// Retry with server credentials if authentication is required
 	if r.StatusCode == 401 && len(user) > 0 && p.HttpAgentClient != nil {
-		// build new response
-		authenticated, err := http.NewRequest(req.Method, req.URL.String(), req.Body)
-		authenticated.Header.Set("User-Agent", GetServerFullName())
-		authenticated.Header.Set("On-Behalf-Of", user)
-		// also copy headers
-		CopyHeaders(req.Header, authenticated.Header)
-
-		var solutionMsg string
-		var client *http.Client
-		// Retry the request
-		if len(cookies[user]) > 0 { // Use existing cookie
-			authenticated.AddCookie(cookies[user][req.Host][0])
-			// Create the client
-			client = p.HttpClient
-			solutionMsg = "Retrying with cookies"
-		} else { // Using WebIDTLS client
-			client = p.HttpAgentClient
-			solutionMsg = "Retrying with WebID-TLS"
-		}
 		// Close the previous response to reuse the connection
 		r.Body.Close()
 
-		r, err = client.Do(authenticated)
+		// build new response
+		authenticated, err := http.NewRequest(req.Method, req.URL.String(), req.Body)
+		// copy headers
+		CopyHeaders(req.Header, authenticated.Header)
+		// overwrite our specific ones
+		authenticated.Header.Set("User-Agent", GetServerFullName())
+		authenticated.Header.Set("On-Behalf-Of", user)
+
+		var solutionMsg string
+		// Retry the request
+		if len(cookies[user]) > 0 { // Use existing cookie
+			solutionMsg = "Retrying with cookies"
+			authenticated.AddCookie(cookies[user][req.Host][0])
+			// Create the client
+			r, err = p.HttpClient.Do(authenticated)
+		} else { // Using WebIDTLS client
+			solutionMsg = "Retrying with WebID-TLS"
+			r, err = p.HttpAgentClient.Do(authenticated)
+		}
+
 		if err != nil {
 			p.Log.Println("Request execution error on auth retry:", err)
 			w.WriteHeader(500)
@@ -156,7 +158,9 @@ func (p *Proxy) Handler(w http.ResponseWriter, req *http.Request) {
 func CopyHeaders(from http.Header, to http.Header) {
 	for key, values := range from {
 		for _, value := range values {
-			to.Set(key, value)
+			if key != "User" || key != "Cookie" {
+				to.Set(key, value)
+			}
 		}
 	}
 }
@@ -173,13 +177,12 @@ func NewClient(skip bool) *http.Client {
 	}
 }
 
-func NewAgentClient(cert *tls.Certificate, skip bool) *http.Client {
-	//TODO handle bad/missing cert
+func (agent *Agent) NewAgentClient(skip bool) *http.Client {
 	return &http.Client{
 		Transport: &http.Transport{
 			MaxIdleConnsPerHost: MaxIdleConnections,
 			TLSClientConfig: &tls.Config{
-				Certificates:       []tls.Certificate{*cert},
+				Certificates:       []tls.Certificate{*agent.Cert},
 				InsecureSkipVerify: skip,
 			},
 		},

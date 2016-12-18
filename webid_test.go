@@ -2,14 +2,30 @@ package solidproxy
 
 import (
 	"crypto/rsa"
-	"crypto/x509"
-	"encoding/asn1"
+	"crypto/tls"
 	"fmt"
+	"net/http"
+
 	// "net/http"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 )
+
+func TestNewRSAcert(t *testing.T) {
+	p, _, _, err := NewRSAKey(rsaBits)
+	assert.NoError(t, err)
+	cert, err := NewRSAcert(testAgentWebID, "Solid Proxy Agent", p)
+	assert.NoError(t, err)
+
+	webid, err := WebIDFromCert(cert)
+	assert.NoError(t, err)
+	assert.Equal(t, testAgentWebID, webid)
+
+	webid, err = WebIDFromBytes(cert.Certificate[0])
+	assert.NoError(t, err)
+	assert.Equal(t, testAgentWebID, webid)
+}
 
 func TestNewRSAKey(t *testing.T) {
 	p, e, n, err := NewRSAKey(rsaBits)
@@ -47,32 +63,26 @@ func TestNewAgentLocalBadKey(t *testing.T) {
 	assert.Error(t, err)
 }
 
-func TestNewRSAcert(t *testing.T) {
-	p, _, _, err := NewRSAKey(rsaBits)
-	assert.NoError(t, err)
-	cert, err := NewRSAcert(testAgentWebID, "Solid Proxy Agent", p)
-	assert.NoError(t, err)
-
-	webid, err := WebIDFromCert(cert.Certificate[0])
-	assert.NoError(t, err)
-	assert.Equal(t, "URI: "+testAgentWebID, webid)
+func TestWebIDFromBytesFail(t *testing.T) {
+	_, err := WebIDFromBytes([]byte(""))
+	assert.Error(t, err)
 }
 
-func WebIDFromCert(cert []byte) (string, error) {
-	parsed, err := x509.ParseCertificate(cert)
-	if err != nil {
-		return "", err
-	}
+func TestWebIDFromCertFail(t *testing.T) {
+	crt := &tls.Certificate{}
+	crt.Certificate = append(crt.Certificate, []byte(""))
+	_, err := WebIDFromCert(crt)
+	assert.Error(t, err)
+}
 
-	for _, x := range parsed.Extensions {
-		if x.Id.Equal(subjectAltName) {
-			v := asn1.RawValue{}
-			_, err = asn1.Unmarshal(x.Value, &v)
-			if err != nil {
-				return "", err
-			}
-			return string(v.Bytes[2:]), nil
-		}
-	}
-	return "", nil
+func TestWebIDFromReqFail(t *testing.T) {
+	req, err := http.NewRequest("HEAD", testAgentWebID, nil)
+	assert.NoError(t, err)
+	_, err = WebIDFromReq(req)
+	assert.Error(t, err)
+
+	req.TLS = &tls.ConnectionState{}
+	req.TLS.HandshakeComplete = true
+	_, err = WebIDFromReq(req)
+	assert.Error(t, err)
 }
