@@ -199,11 +199,8 @@ func WebIDFromCert(cert *tls.Certificate) (string, error) {
 func WebIDFromReq(req *http.Request) (string, error) {
 	t := req.TLS
 
-	if t == nil {
-		return "", errors.New("Not a TLS connection")
-	}
-	if !t.HandshakeComplete {
-		return "", errors.New("TLS handshake failed")
+	if t == nil || !t.HandshakeComplete {
+		return "", errors.New("Not a TLS connection or TLS handshake failed")
 	}
 
 	if len(t.PeerCertificates) < 1 {
