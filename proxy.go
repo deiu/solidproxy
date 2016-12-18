@@ -83,7 +83,7 @@ func (p *Proxy) Handler(w http.ResponseWriter, req *http.Request) {
 	}
 
 	// Retry with server credentials if authentication is required
-	if r.StatusCode == 401 && len(user) > 0 && p.HttpAgentClient != nil {
+	if (r.StatusCode == 401 || r.StatusCode == 403) && (len(user) > 0 && p.HttpAgentClient != nil) {
 		// Close the previous response to reuse the connection
 		r.Body.Close()
 
