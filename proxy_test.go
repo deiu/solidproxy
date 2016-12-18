@@ -1,6 +1,7 @@
 package solidproxy
 
 import (
+	"crypto/tls"
 	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
@@ -16,11 +17,17 @@ var (
 
 func init() {
 	// ** MOCK Server **
-	e := MockServer()
+	handler := MockServer()
+	// testMockServer = httptest.NewServer(handler)
 
 	// testServer
-	testMockServer = httptest.NewServer(e)
+	testMockServer = httptest.NewUnstartedServer(handler)
+	testMockServer.TLS = new(tls.Config)
+	testMockServer.TLS.ClientAuth = tls.RequestClientCert
+	testMockServer.TLS.NextProtos = []string{"http/1.1"}
+	testMockServer.StartTLS()
 	testMockServer.URL = strings.Replace(testMockServer.URL, "127.0.0.1", "localhost", 1)
+	println(testMockServer.URL)
 }
 
 func setOrigin(w http.ResponseWriter, req *http.Request) {
@@ -54,17 +61,28 @@ func MockServer() http.Handler {
 			return
 		}
 
-		// set cookie
-		cookie := &http.Cookie{Name: "sample", Value: "sample", HttpOnly: false}
-		http.SetCookie(w, cookie)
-		w.WriteHeader(200)
-		w.Write([]byte("foo"))
+		webid, err := WebIDFromReq(req)
+		if err != nil {
+			w.Write([]byte("\n" + err.Error()))
+			return
+		}
+		if len(webid) > 0 {
+			// set cookie
+			cookie := &http.Cookie{Name: "sample", Value: "sample", HttpOnly: false}
+			http.SetCookie(w, cookie)
+			w.WriteHeader(200)
+			w.Header().Set("User", webid)
+			return
+		}
+
+		w.WriteHeader(401)
+		w.Write([]byte("Authentication required"))
 		return
 	}))
 
 	handler.Handle("/200", http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 		setOrigin(w, req)
-		w.Header().Set("User", req.Header.Get("User"))
+		w.Header().Set("User-Agent-Received", req.Header.Get("User-Agent"))
 		w.WriteHeader(200)
 		w.Write([]byte("foo"))
 		return
@@ -140,11 +158,10 @@ func TestProxyHeaders(t *testing.T) {
 	req, err := http.NewRequest("GET", testProxyServer.URL+"/proxy?uri="+testMockServer.URL+"/200", nil)
 	assert.NoError(t, err)
 	req.Header.Set("Origin", origin)
-	req.Header.Set("User", testAgentWebID)
 	resp, err := testClient.Do(req)
 	assert.NoError(t, err)
 	assert.Equal(t, 200, resp.StatusCode)
-	assert.Equal(t, testAgentWebID, resp.Header.Get("User"))
+	assert.Equal(t, GetServerFullName(), resp.Header.Get("User-Agent-Received"))
 	assert.Equal(t, origin, resp.Header.Get("Access-Control-Allow-Origin"))
 }
 
@@ -157,6 +174,8 @@ func TestProxyNotAuthenticated(t *testing.T) {
 }
 
 func TestProxyAuthenticated(t *testing.T) {
+	alice := "https://alice.com/profile#me"
+
 	req, err := http.NewRequest("GET", testProxyServer.URL+"/proxy?uri="+testMockServer.URL+"/401", nil)
 	assert.NoError(t, err)
 	resp, err := testClient.Do(req)
@@ -165,14 +184,15 @@ func TestProxyAuthenticated(t *testing.T) {
 
 	req, err = http.NewRequest("GET", testProxyServer.URL+"/proxy?uri="+testMockServer.URL+"/401", nil)
 	assert.NoError(t, err)
-	req.Header.Set("User", "https://alice.com/profile#me")
+	req.Header.Set("User", alice)
 	resp, err = testClient.Do(req)
 	assert.NoError(t, err)
 	assert.Equal(t, 200, resp.StatusCode)
 
+	// retry with cookie
 	req, err = http.NewRequest("GET", testProxyServer.URL+"/proxy?uri="+testMockServer.URL+"/401", nil)
 	assert.NoError(t, err)
-	req.Header.Set("User", "https://alice.com/profile#me")
+	req.Header.Set("User", alice)
 	resp, err = testClient.Do(req)
 	assert.NoError(t, err)
 	assert.Equal(t, 200, resp.StatusCode)
@@ -243,6 +263,8 @@ func TestProxyNoAgent(t *testing.T) {
 	agent, err := NewAgent(testAgentWebID)
 	assert.NoError(t, err)
 	proxy := NewProxy(agent, true)
+
+	assert.Nil(t, proxy.HttpAgentClient)
 
 	handler := NewProxyHandler(conf, proxy)
 	// testProxyServer

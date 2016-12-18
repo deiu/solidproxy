@@ -120,6 +120,6 @@ func TestRouteProxyEmptyURIValue(t *testing.T) {
 func TestLogger(t *testing.T) {
 	config := NewServerConfig()
 	config.Verbose = true
-	logger := InitLogger(config)
+	logger := InitLogger(config.Verbose)
 	assert.NotNil(t, logger)
 }

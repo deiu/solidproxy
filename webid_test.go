@@ -2,9 +2,8 @@ package solidproxy
 
 import (
 	"crypto/rsa"
-	"crypto/x509"
-	"encoding/asn1"
 	"fmt"
+
 	// "net/http"
 	"testing"
 
@@ -53,26 +52,7 @@ func TestNewRSAcert(t *testing.T) {
 	cert, err := NewRSAcert(testAgentWebID, "Solid Proxy Agent", p)
 	assert.NoError(t, err)
 
-	webid, err := WebIDFromCert(cert.Certificate[0])
+	webid, err := WebIDFromCert(cert)
 	assert.NoError(t, err)
-	assert.Equal(t, "URI: "+testAgentWebID, webid)
-}
-
-func WebIDFromCert(cert []byte) (string, error) {
-	parsed, err := x509.ParseCertificate(cert)
-	if err != nil {
-		return "", err
-	}
-
-	for _, x := range parsed.Extensions {
-		if x.Id.Equal(subjectAltName) {
-			v := asn1.RawValue{}
-			_, err = asn1.Unmarshal(x.Value, &v)
-			if err != nil {
-				return "", err
-			}
-			return string(v.Bytes[2:]), nil
-		}
-	}
-	return "", nil
+	assert.Equal(t, testAgentWebID, webid)
 }
