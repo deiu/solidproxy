@@ -102,7 +102,7 @@ func (p *Proxy) Handler(w http.ResponseWriter, req *http.Request) {
 			authenticated.AddCookie(cookies[user][req.Host][0])
 		}
 		// Create the client
-		r, err = p.HttpClient.Do(authenticated)
+		r, err = p.HttpAgentClient.Do(authenticated)
 		if err != nil {
 			p.Log.Println("Request execution error on auth retry:", err)
 			w.WriteHeader(500)
