@@ -95,18 +95,14 @@ func (p *Proxy) Handler(w http.ResponseWriter, req *http.Request) {
 		authenticated.Header.Set("User-Agent", GetServerFullName())
 		authenticated.Header.Set("On-Behalf-Of", user)
 
-		var solutionMsg string
+		solutionMsg := "Retrying with WebID-TLS"
 		// Retry the request
 		if len(cookies[user]) > 0 { // Use existing cookie
 			solutionMsg = "Retrying with cookies"
 			authenticated.AddCookie(cookies[user][req.Host][0])
-			// Create the client
-			r, err = p.HttpClient.Do(authenticated)
-		} else { // Using WebIDTLS client
-			solutionMsg = "Retrying with WebID-TLS"
-			r, err = p.HttpAgentClient.Do(authenticated)
 		}
-
+		// Create the client
+		r, err = p.HttpClient.Do(authenticated)
 		if err != nil {
 			p.Log.Println("Request execution error on auth retry:", err)
 			w.WriteHeader(500)
