@@ -8,6 +8,7 @@ export SOLIDPROXY_AGENT="http://localhost:3200/webid#me"
 
 export SOLIDPROXY_TLSKEY="test_key.pem"
 export SOLIDPROXY_TLSCERT="test_cert.pem"
-export SOLIDPROXY_ENABLETLS="0"
+export SOLIDPROXY_ENABLEAGENTTLS=""
+export SOLIDPROXY_ENABLEPROXYTLS=""
 
 go run proxy-server/*.go

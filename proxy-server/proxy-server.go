@@ -1,7 +1,6 @@
 package main
 
 import (
-	"errors"
 	"io/ioutil"
 	"log"
 	"net/http"
@@ -58,9 +57,11 @@ func main() {
 		configProxy.Port = os.Getenv("SOLIDPROXY_PROXYPORT") // default= :3129
 	}
 	// Enable or not HTTPS
-	if len(os.Getenv("SOLIDPROXY_ENABLETLS")) > 0 {
-		configProxy.EnableTLS = true // default= false
+	if len(os.Getenv("SOLIDPROXY_ENABLEAGENTTLS")) > 0 {
 		configAgent.EnableTLS = true // default= false
+	}
+	if len(os.Getenv("SOLIDPROXY_ENABLEPROXYTLS")) > 0 {
+		configProxy.EnableTLS = true // default= false
 	}
 	// Agent config
 	if len(os.Getenv("SOLIDPROXY_AGENTPORT")) > 0 {
@@ -95,25 +96,24 @@ func main() {
 
 	// Start servers
 	println("\nStarting server --", solidproxy.GetServerFullName())
-	go agentServer.ListenAndServe()
-	proxyServer.ListenAndServe()
+	if configAgent.EnableTLS {
+		go agentServer.ListenAndServeTLS(configAgent.TLSCert, configAgent.TLSKey)
+	} else {
+		go agentServer.ListenAndServe()
+	}
+	if configProxy.EnableTLS {
+		proxyServer.ListenAndServeTLS(configProxy.TLSCert, configProxy.TLSKey)
+	} else {
+		proxyServer.ListenAndServe()
+	}
+
 }
 
 func NewServer(handler http.Handler, config *solidproxy.ServerConfig) (*http.Server, error) {
 	// Create proxy server listener and set config values
-	var err error
 	s := &http.Server{
 		Addr:    ":" + config.Port,
 		Handler: handler,
-	}
-	if config.EnableTLS {
-		if len(config.TLSKey) == 0 || len(config.TLSCert) == 0 {
-			return s, errors.New("TLS cert or key missing")
-		}
-		s.TLSConfig, err = solidproxy.NewTLSConfig(config)
-		if err != nil {
-			return s, err
-		}
 	}
 	return s, nil
 }
