@@ -1,7 +1,7 @@
 package solidproxy
 
 const (
-	ServerVersion = "v2.1.0"
+	ServerVersion = "v2.1.1"
 	ServerName    = "SolidProxy"
 )
 
