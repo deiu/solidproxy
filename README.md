@@ -37,7 +37,8 @@ Solidproxy uses environment variables (for docker compatibility).
 * `SOLIDPROXY_PROXYPORT` [default 3129]-- the default port for the proxy service
 * `SOLIDPROXY_AGENTPORT` [default 3200]-- the default port for the agent WebID service
 * `SOLIDPROXY_AGENT` -- the URL (WebID) of the agent (in case it's on a different server). This is important if you want to use the proxy for delegation of authenticated requests.
-* `SOLIDPROXY_ENABLETLS` -- enable HTTPS for the proxy service
+* `SOLIDPROXY_ENABLEPROXYTLS` -- enable HTTPS for the proxy service
+* `SOLIDPROXY_ENABLEAGENTTLS` -- enable HTTPS for the agent service
 * `SOLIDPROXY_TLSKEY` -- path to the TLS key file (using PEM format)
 * `SOLIDPROXY_TLSCERT` -- path to the TLS cert file (using PEM format)
 
@@ -52,7 +53,8 @@ export SOLIDPROXY_AGENTPORT="3200"
 
 export SOLIDPROXY_AGENT="https://example.org:3200/webid#me"
 
-export SOLIDPROXY_ENABLETLS="1"
+export SOLIDPROXY_ENABLEPROXYTLS="1"
+export SOLIDPROXY_ENABLEAGENTTLS="1"
 export SOLIDPROXY_TLSKEY="test_key.pem"
 export SOLIDPROXY_TLSCERT="test_cert.pem"
 ```
@@ -64,14 +66,14 @@ For the delegated authentication to work, you need to indicate that you trust an
 This is just a simple matter of adding the following triple to your WebID profile:
 
 ```
-<https://bob.com/profile#me> <http://www.w3.org/ns/auth/acl#delegates> <http://example.org:3200/webid#me> .
+<https://bob.com/profile#me> <http://www.w3.org/ns/auth/acl#delegates> <https://example.org:3200/webid#me> .
 ```
 
 This triple says that you *delegate* the agent with the WebID `https://example.org:3200/webid#me`.
 
 ## Usage
 
-The app spawns two servers, one that serves the proxy on port `3129` by default (i.e. `example.org:3129/proxy`), and another one on port `3200` that serves the agent's WebID profile for authenticated requests (i.e. `example.org:3200/webid`).
+The app spawns two servers. One that serves the proxy on port `3129` and route `/proxy` by default (i.e. `example.org:3129/proxy`). And another one on port `3200` and route `webid` (i.e. `example.org:3200/webid`), which serves the agent's WebID profile for authenticated requests.
 
 ### Running as a micro-service
 
