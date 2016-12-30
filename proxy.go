@@ -97,7 +97,7 @@ func (p *Proxy) Handler(w http.ResponseWriter, req *http.Request) {
 
 		solutionMsg := "Retrying with WebID-TLS"
 		// Retry the request
-		if len(cookies[user]) > 0 { // Use existing cookie
+		if len(cookies[user]) > 0 && len(cookies[user][req.Host]) > 0 { // Use existing cookie
 			solutionMsg = "Retrying with cookies"
 			authenticated.AddCookie(cookies[user][req.Host][0])
 		}
