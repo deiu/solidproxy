@@ -11,7 +11,7 @@ import (
 
 const (
 	MaxIdleConnections int = 20
-	RequestTimeout     int = 5
+	RequestTimeout     int = 2
 )
 
 type Proxy struct {
