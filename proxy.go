@@ -63,70 +63,39 @@ func (p *Proxy) Handler(w http.ResponseWriter, req *http.Request) {
 	// get user
 	user := req.Header.Get("User")
 
+	// check if we need to authenticate from the start
+	withCredentials := false
+	if requiresAuth(req.URL.String()) && len(user) > 0 {
+		withCredentials = true
+		p.Log.Println("Request will use credentials for cached URI:", req.URL.String())
+	}
+
 	p.Log.Println("Proxying request for URI:", req.URL, "and user:", user, "using Agent:", p.Agent.WebID)
 
 	// build new response
-	// no error should exist at this point, it was caught earlier
-	// by url.Parse and the server handler
-	plain, _ := http.NewRequest(req.Method, req.URL.String(), req.Body)
-	// copy headers
-	CopyHeaders(req.Header, plain.Header)
-	// overwrite User Agent
-	plain.Header.Set("User-Agent", GetServerFullName())
-
-	r, err := p.HttpClient.Do(plain)
+	r, err := p.NewRequest(req, user, withCredentials)
 	if err != nil {
 		p.Log.Println("Request execution error:", err)
 		w.WriteHeader(500)
 		w.Write([]byte(err.Error()))
 		return
 	}
+	defer r.Body.Close()
 
 	// Retry with server credentials if authentication is required
-	if (r.StatusCode == 401 || r.StatusCode == 403) && (len(user) > 0 && p.HttpAgentClient != nil) {
-		// Close the previous response to reuse the connection
-		r.Body.Close()
-
-		// build new response
-		authenticated, err := http.NewRequest(req.Method, req.URL.String(), req.Body)
-		// copy headers
-		CopyHeaders(req.Header, authenticated.Header)
-		// overwrite our specific ones
-		authenticated.Header.Set("User-Agent", GetServerFullName())
-		authenticated.Header.Set("On-Behalf-Of", user)
-
-		solutionMsg := "Retrying with WebID-TLS"
-		// Retry the request
-		if len(cookies[user]) > 0 && len(cookies[user][req.Host]) > 0 { // Use existing cookie
-			solutionMsg = "Retrying with cookies"
-			authenticated.AddCookie(cookies[user][req.Host][0])
+	if r.StatusCode == 401 {
+		rememberUri(req.URL.String())
+		if len(user) > 0 && p.HttpAgentClient != nil {
+			withCredentials = true
+			r, err := p.NewRequest(req, user, withCredentials)
+			if err != nil {
+				p.Log.Println("Request execution error:", err)
+				w.WriteHeader(500)
+				w.Write([]byte(err.Error()))
+				return
+			}
+			defer r.Body.Close()
 		}
-		// Create the client
-		r, err = p.HttpAgentClient.Do(authenticated)
-		if err != nil {
-			p.Log.Println("Request execution error on auth retry:", err)
-			w.WriteHeader(500)
-			w.Write([]byte(err.Error()))
-			return
-		}
-		// Close the response to reuse the connection
-		defer r.Body.Close()
-
-		// Store cookies per user and request host
-		if len(r.Cookies()) > 0 {
-			cookiesL.Lock()
-			// TODO: should store cookies based on domain value AND path from cookie
-			cookies[user] = map[string][]*http.Cookie{}
-			cookies[user][req.Host] = r.Cookies()
-			p.Log.Printf("Cookies: %+v\n", cookies)
-			cookiesL.Unlock()
-		}
-		p.Log.Println("Resource "+authenticated.URL.String(),
-			"requires authentication (HTTP 401).", solutionMsg,
-			"resulted in HTTP", r.StatusCode)
-
-		p.Log.Println("Got authenticated response code:", r.StatusCode)
-		w.Header().Set("Authenticated-Request", "1")
 	}
 
 	// Write data back
@@ -147,7 +116,7 @@ func (p *Proxy) Handler(w http.ResponseWriter, req *http.Request) {
 	body, _ := ioutil.ReadAll(r.Body)
 	w.Write(body)
 
-	p.Log.Println("Received public data with status HTTP", r.StatusCode)
+	p.Log.Println("Response received with HTTP status", r.StatusCode)
 	return
 }
 
@@ -159,6 +128,70 @@ func CopyHeaders(from http.Header, to http.Header) {
 			}
 		}
 	}
+}
+
+func (p *Proxy) NewRequest(req *http.Request, user string, withCredentials bool) (*http.Response, error) {
+	// prepare new request
+	request, err := http.NewRequest(req.Method, req.URL.String(), req.Body)
+	// copy headers
+	CopyHeaders(req.Header, request.Header)
+	// overwrite User Agent
+	request.Header.Set("User-Agent", GetServerFullName())
+
+	// build new response
+	if !withCredentials || len(user) == 0 {
+		return p.HttpClient.Do(request)
+	}
+
+	request.Header.Set("On-Behalf-Of", user)
+	solutionMsg := "Retrying with WebID-TLS"
+
+	// Remember for future reference that this resource required authentication
+	rememberUri(req.URL.String())
+	p.Log.Println(req.URL.String(), "saved to auth list")
+
+	// Retry the request
+	if len(cookies[user]) > 0 && len(cookies[user][req.Host]) > 0 { // Use existing cookie
+		solutionMsg = "Retrying with cookies"
+		request.AddCookie(cookies[user][req.Host][0])
+	}
+	// perform the request
+	r, err := p.HttpAgentClient.Do(request)
+	if err != nil {
+		return r, err
+	}
+	// Close the response to reuse the connection
+	defer r.Body.Close()
+
+	// Store cookies per user and request host
+	if len(r.Cookies()) > 0 {
+		cookiesL.Lock()
+		// TODO: should store cookies based on domain value AND path from cookie
+		cookies[user] = map[string][]*http.Cookie{}
+		cookies[user][req.Host] = r.Cookies()
+		p.Log.Printf("Cookies: %+v\n", cookies)
+		cookiesL.Unlock()
+	}
+	p.Log.Println("Resource "+request.URL.String(),
+		"requires authentication (HTTP 401).", solutionMsg,
+		"resulted in HTTP", r.StatusCode)
+
+	p.Log.Println("Got authenticated response code:", r.StatusCode)
+	return r, err
+}
+
+//@TODO add a forgetUri() method that deletes the cache
+func rememberUri(uri string) {
+	credentialsL.Lock()
+	credentials[uri] = true
+	credentialsL.Unlock()
+}
+
+func requiresAuth(uri string) bool {
+	if len(credentials) > 0 && credentials[uri] {
+		return true
+	}
+	return false
 }
 
 func NewClient(skip bool) *http.Client {

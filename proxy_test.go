@@ -189,7 +189,7 @@ func TestProxyAuthenticated(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, 200, resp.StatusCode)
 
-	// retry with cookie
+	// retry with cookie and try to remember if we have to auth from the start
 	req, err = http.NewRequest("GET", testProxyServer.URL+"/proxy?uri="+testMockServer.URL+"/401", nil)
 	assert.NoError(t, err)
 	req.Header.Set("User", alice)
