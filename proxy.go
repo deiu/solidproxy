@@ -188,7 +188,6 @@ func (p *Proxy) NewRequest(req *http.Request, user string, authenticated bool) (
 	return r, err
 }
 
-//@TODO add a forgetUri() method that deletes the cache
 func rememberUri(uri string) bool {
 	if !privateUris[uri] {
 		privateUrisL.Lock()
