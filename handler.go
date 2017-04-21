@@ -6,15 +6,6 @@ import (
 	"log"
 	"net/http"
 	"os"
-	"sync"
-)
-
-var (
-	cookies  = map[string]map[string][]*http.Cookie{}
-	cookiesL = new(sync.RWMutex)
-
-	credentials  = map[string]bool{}
-	credentialsL = new(sync.RWMutex)
 )
 
 func InitLogger(verbose bool) *log.Logger {

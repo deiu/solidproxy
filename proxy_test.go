@@ -13,6 +13,7 @@ import (
 
 var (
 	testMockServer *httptest.Server
+	testUri        = "https://example.org"
 )
 
 func init() {
@@ -283,4 +284,17 @@ func TestProxyNoAgent(t *testing.T) {
 	resp, err := testClient.Do(req)
 	assert.NoError(t, err)
 	assert.Equal(t, 401, resp.StatusCode)
+}
+
+func TestRememberUri(t *testing.T) {
+	assert.True(t, rememberUri(testUri))
+}
+
+func TestRequiresAuth(t *testing.T) {
+	assert.True(t, requiresAuth(testUri))
+}
+
+func TestForgetUri(t *testing.T) {
+	assert.True(t, forgetUri(testUri))
+	assert.False(t, requiresAuth(testUri))
 }

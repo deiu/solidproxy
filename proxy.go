@@ -6,12 +6,21 @@ import (
 	"log"
 	"net/http"
 	"net/url"
+	"sync"
 	"time"
 )
 
 const (
 	MaxIdleConnections int = 20
 	RequestTimeout     int = 2
+)
+
+var (
+	cookies  = map[string]map[string][]*http.Cookie{}
+	cookiesL = new(sync.RWMutex)
+
+	privateUris  = map[string]bool{}
+	privateUrisL = new(sync.RWMutex)
 )
 
 type Proxy struct {
@@ -64,9 +73,9 @@ func (p *Proxy) Handler(w http.ResponseWriter, req *http.Request) {
 	user := req.Header.Get("User")
 
 	// check if we need to authenticate from the start
-	withCredentials := false
+	authenticated := false
 	if requiresAuth(req.URL.String()) {
-		withCredentials = true
+		authenticated = true
 		p.Log.Println("Request will use credentials for cached URI:", req.URL.String())
 	}
 
@@ -74,12 +83,15 @@ func (p *Proxy) Handler(w http.ResponseWriter, req *http.Request) {
 
 	// build new response
 	var r *http.Response
-	r, err = p.NewRequest(req, user, withCredentials)
+	r, err = p.NewRequest(req, user, authenticated)
 	if err != nil {
 		p.ExecError(w, err)
 		return
 	}
-
+	// the resource might have turned public, no need to remember it anymore
+	if r.StatusCode >= 200 && r.StatusCode <= 400 {
+		forgetUri(req.URL.String())
+	}
 	// Retry with server credentials if authentication is required
 	if r.StatusCode == 401 {
 		// Close the response to reuse the connection
@@ -90,8 +102,8 @@ func (p *Proxy) Handler(w http.ResponseWriter, req *http.Request) {
 			p.Log.Println(req.URL.String(), "saved to auth list")
 		}
 		if len(user) > 0 && p.HttpAgentClient != nil {
-			withCredentials = true
-			r, err = p.NewRequest(req, user, withCredentials)
+			authenticated = true
+			r, err = p.NewRequest(req, user, authenticated)
 			if err != nil {
 				p.ExecError(w, err)
 				return
@@ -132,7 +144,7 @@ func CopyHeaders(from http.Header, to http.Header) {
 	}
 }
 
-func (p *Proxy) NewRequest(req *http.Request, user string, withCredentials bool) (*http.Response, error) {
+func (p *Proxy) NewRequest(req *http.Request, user string, authenticated bool) (*http.Response, error) {
 	// prepare new request
 	request, err := http.NewRequest(req.Method, req.URL.String(), req.Body)
 	// copy headers
@@ -141,7 +153,7 @@ func (p *Proxy) NewRequest(req *http.Request, user string, withCredentials bool)
 	request.Header.Set("User-Agent", GetServerFullName())
 
 	// build new response
-	if !withCredentials || len(user) == 0 {
+	if !authenticated || len(user) == 0 {
 		return p.HttpClient.Do(request)
 	}
 
@@ -178,17 +190,25 @@ func (p *Proxy) NewRequest(req *http.Request, user string, withCredentials bool)
 
 //@TODO add a forgetUri() method that deletes the cache
 func rememberUri(uri string) bool {
-	if !credentials[uri] {
-		credentialsL.Lock()
-		credentials[uri] = true
-		credentialsL.Unlock()
+	if !privateUris[uri] {
+		privateUrisL.Lock()
+		privateUris[uri] = true
+		privateUrisL.Unlock()
+		return true
+	}
+	return false
+}
+
+func forgetUri(uri string) bool {
+	if privateUris[uri] {
+		delete(privateUris, uri)
 		return true
 	}
 	return false
 }
 
 func requiresAuth(uri string) bool {
-	if len(credentials) > 0 && credentials[uri] {
+	if len(privateUris) > 0 && privateUris[uri] {
 		return true
 	}
 	return false
