@@ -65,7 +65,7 @@ func (p *Proxy) Handler(w http.ResponseWriter, req *http.Request) {
 
 	// check if we need to authenticate from the start
 	withCredentials := false
-	if requiresAuth(req.URL.String()) && len(user) > 0 {
+	if requiresAuth(req.URL.String()) {
 		withCredentials = true
 		p.Log.Println("Request will use credentials for cached URI:", req.URL.String())
 	}
@@ -73,25 +73,27 @@ func (p *Proxy) Handler(w http.ResponseWriter, req *http.Request) {
 	p.Log.Println("Proxying request for URI:", req.URL, "and user:", user, "using Agent:", p.Agent.WebID)
 
 	// build new response
-	r, err := p.NewRequest(req, user, withCredentials)
+	var r *http.Response
+	r, err = p.NewRequest(req, user, withCredentials)
 	if err != nil {
-		p.Log.Println("Request execution error:", err)
-		w.WriteHeader(500)
-		w.Write([]byte(err.Error()))
+		p.ExecError(w, err)
 		return
 	}
-	defer r.Body.Close()
 
 	// Retry with server credentials if authentication is required
 	if r.StatusCode == 401 {
-		rememberUri(req.URL.String())
+		// Close the response to reuse the connection
+		defer r.Body.Close()
+
+		saved := rememberUri(req.URL.String())
+		if saved {
+			p.Log.Println(req.URL.String(), "saved to auth list")
+		}
 		if len(user) > 0 && p.HttpAgentClient != nil {
 			withCredentials = true
-			r, err := p.NewRequest(req, user, withCredentials)
+			r, err = p.NewRequest(req, user, withCredentials)
 			if err != nil {
-				p.Log.Println("Request execution error:", err)
-				w.WriteHeader(500)
-				w.Write([]byte(err.Error()))
+				p.ExecError(w, err)
 				return
 			}
 			defer r.Body.Close()
@@ -146,10 +148,6 @@ func (p *Proxy) NewRequest(req *http.Request, user string, withCredentials bool)
 	request.Header.Set("On-Behalf-Of", user)
 	solutionMsg := "Retrying with WebID-TLS"
 
-	// Remember for future reference that this resource required authentication
-	rememberUri(req.URL.String())
-	p.Log.Println(req.URL.String(), "saved to auth list")
-
 	// Retry the request
 	if len(cookies[user]) > 0 && len(cookies[user][req.Host]) > 0 { // Use existing cookie
 		solutionMsg = "Retrying with cookies"
@@ -160,8 +158,6 @@ func (p *Proxy) NewRequest(req *http.Request, user string, withCredentials bool)
 	if err != nil {
 		return r, err
 	}
-	// Close the response to reuse the connection
-	defer r.Body.Close()
 
 	// Store cookies per user and request host
 	if len(r.Cookies()) > 0 {
@@ -181,10 +177,14 @@ func (p *Proxy) NewRequest(req *http.Request, user string, withCredentials bool)
 }
 
 //@TODO add a forgetUri() method that deletes the cache
-func rememberUri(uri string) {
-	credentialsL.Lock()
-	credentials[uri] = true
-	credentialsL.Unlock()
+func rememberUri(uri string) bool {
+	if !credentials[uri] {
+		credentialsL.Lock()
+		credentials[uri] = true
+		credentialsL.Unlock()
+		return true
+	}
+	return false
 }
 
 func requiresAuth(uri string) bool {
@@ -192,6 +192,12 @@ func requiresAuth(uri string) bool {
 		return true
 	}
 	return false
+}
+
+func (p *Proxy) ExecError(w http.ResponseWriter, err error) {
+	p.Log.Println("Request execution error:", err)
+	w.WriteHeader(500)
+	w.Write([]byte(err.Error()))
 }
 
 func NewClient(skip bool) *http.Client {
