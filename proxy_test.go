@@ -72,6 +72,7 @@ func MockServer() http.Handler {
 			http.SetCookie(w, cookie)
 			w.WriteHeader(200)
 			w.Header().Set("User", webid)
+			w.Write([]byte("foo"))
 			return
 		}
 
@@ -173,6 +174,9 @@ func TestProxyAuthenticated(t *testing.T) {
 	req.Header.Set("User", alice)
 	resp, err := testClient.Do(req)
 	assert.NoError(t, err)
+	body, err := ioutil.ReadAll(resp.Body)
+	resp.Body.Close()
+	assert.Equal(t, "foo", string(body))
 	assert.Equal(t, 200, resp.StatusCode)
 
 	// retry with cookie
@@ -181,6 +185,9 @@ func TestProxyAuthenticated(t *testing.T) {
 	req.Header.Set("User", alice)
 	resp, err = testClient.Do(req)
 	assert.NoError(t, err)
+	body, err = ioutil.ReadAll(resp.Body)
+	resp.Body.Close()
+	assert.Equal(t, "foo", string(body))
 	assert.Equal(t, 200, resp.StatusCode)
 }
 
