@@ -165,37 +165,37 @@ func TestProxyHeaders(t *testing.T) {
 	assert.Equal(t, origin, resp.Header.Get("Access-Control-Allow-Origin"))
 }
 
+func TestProxyAuthenticated(t *testing.T) {
+	alice := "https://alice.com/profile#me"
+
+	req, err := http.NewRequest("GET", testProxyServer.URL+"/proxy?uri="+testMockServer.URL+"/401", nil)
+	assert.NoError(t, err)
+	req.Header.Set("User", alice)
+	resp, err := testClient.Do(req)
+	assert.NoError(t, err)
+	assert.Equal(t, 200, resp.StatusCode)
+
+	// retry with cookie
+	req, err = http.NewRequest("GET", testProxyServer.URL+"/proxy?uri="+testMockServer.URL+"/401", nil)
+	assert.NoError(t, err)
+	req.Header.Set("User", alice)
+	resp, err = testClient.Do(req)
+	assert.NoError(t, err)
+	assert.Equal(t, 200, resp.StatusCode)
+}
+
 func TestProxyNotAuthenticated(t *testing.T) {
 	req, err := http.NewRequest("GET", testProxyServer.URL+"/proxy?uri="+testMockServer.URL+"/200", nil)
 	assert.NoError(t, err)
 	resp, err := testClient.Do(req)
 	assert.NoError(t, err)
 	assert.Equal(t, 200, resp.StatusCode)
-}
 
-func TestProxyAuthenticated(t *testing.T) {
-	alice := "https://alice.com/profile#me"
-
-	req, err := http.NewRequest("GET", testProxyServer.URL+"/proxy?uri="+testMockServer.URL+"/401", nil)
+	req, err = http.NewRequest("GET", testProxyServer.URL+"/proxy?uri="+testMockServer.URL+"/401", nil)
 	assert.NoError(t, err)
-	resp, err := testClient.Do(req)
+	resp, err = testClient.Do(req)
 	assert.NoError(t, err)
 	assert.Equal(t, 401, resp.StatusCode)
-
-	req, err = http.NewRequest("GET", testProxyServer.URL+"/proxy?uri="+testMockServer.URL+"/401", nil)
-	assert.NoError(t, err)
-	req.Header.Set("User", alice)
-	resp, err = testClient.Do(req)
-	assert.NoError(t, err)
-	assert.Equal(t, 200, resp.StatusCode)
-
-	// retry with cookie and try to remember if we have to auth from the start
-	req, err = http.NewRequest("GET", testProxyServer.URL+"/proxy?uri="+testMockServer.URL+"/401", nil)
-	assert.NoError(t, err)
-	req.Header.Set("User", alice)
-	resp, err = testClient.Do(req)
-	assert.NoError(t, err)
-	assert.Equal(t, 200, resp.StatusCode)
 }
 
 func TestProxyBadURLParse(t *testing.T) {
