@@ -20,6 +20,7 @@ var (
 func init() {
 	var err error
 	skipVerify := true
+	debug := false
 
 	testAgentWebID = "https://example.com/webid#me"
 
@@ -46,7 +47,9 @@ func init() {
 	proxy := NewProxy(agent, skipVerify)
 	proxyConf := NewServerConfig()
 	proxyConf.InsecureSkipVerify = skipVerify
+	proxyConf.Verbose = debug
 	proxyConf.Agent = testAgentWebID
+	proxyConf.Verbose = debug
 	proxyServer := NewProxyHandler(proxyConf, proxy)
 
 	// testProxyServer
