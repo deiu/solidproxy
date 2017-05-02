@@ -2,7 +2,7 @@ package solidproxy
 
 const (
 	// ServerVersion is used to display the server version number during HTTP requests
-	ServerVersion = "v2.1.2"
+	ServerVersion = "v2.1.3"
 	// ServerName is used to display the server name during HTTP requests
 	ServerName = "SolidProxy"
 )
