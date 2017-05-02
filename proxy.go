@@ -1,3 +1,62 @@
+// Copyright 2017 Andrei Sambra and the Solid Project team. All rights reserved.
+// Use of this source code is governed by an MIT-style license that can be found
+// in the LICENSE file.
+
+// Package solidproxy is a transparent browser that can handle WebID-TLS delegated
+// auth for resources that require authentication.
+//
+// A trivial example is:
+//
+// package main
+
+// import (
+// 	"log"
+// 	"net/http"
+// 	"os"
+
+// 	"github.com/solid/solidproxy"
+// )
+
+// func main() {
+// 	mux := http.NewServeMux()
+
+// 	// Init logger
+// 	logger := log.New(os.Stderr, "[debug] ", log.Flags()|log.Lshortfile)
+
+// 	// Next we create a new (local) agent object with its corresponding key
+// 	// pair and profile document and serve it under /agent
+// 	// Alternatively, we can create a "remote" agent to which we need to
+// 	// provide a cert (tls.Certificate) you can load from somewhere:
+// 	// agent, err := solidproxy.NewAgent("https://example.org/agent#me")
+// 	// agent.Cert = someTLScert
+
+// 	agent, err := solidproxy.NewAgentLocal("http://localhost:8080/agent#me")
+// 	if err != nil {
+// 		log.Println("Error creating new agent:", err.Error())
+// 		return
+// 	}
+// 	// assign logger
+// 	agent.Log = logger
+
+// 	// Skip verifying trust chain for certificates?
+// 	// Use true when dealing with self-signed certs (testing, etc.)
+// 	insecureSkipVerify := true
+// 	// Create a new proxy object
+// 	proxy := solidproxy.NewProxy(agent, insecureSkipVerify)
+// 	// assign logger
+// 	proxy.Log = logger
+
+// 	// Prepare proxy handler and serve it at http://localhost:8080/proxy
+// 	mux.HandleFunc("/proxy", proxy.Handler)
+
+// 	// The handleAgent is only needed if you plan to serve the agent's WebID
+// 	// profile yourself; it will be available at http://localhost:8080/agent
+// 	mux.HandleFunc("/agent", agent.Handler)
+
+// 	logger.Println("Listening...")
+// 	http.ListenAndServe(":8080", mux)
+// }
+
 package solidproxy
 
 import (
