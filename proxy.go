@@ -11,43 +11,46 @@ import (
 )
 
 const (
-	MaxIdleConnections int = 20
-	RequestTimeout     int = 2
+	maxIdleConnections int = 20
 )
 
 var (
 	cookies  = map[string]map[string][]*http.Cookie{}
 	cookiesL = new(sync.RWMutex)
 
-	privateUris  = map[string]bool{}
-	privateUrisL = new(sync.RWMutex)
+	privateUris    = map[string]bool{}
+	privateUrisL   = new(sync.RWMutex)
+	requestTimeout = 2
 )
 
+// Proxy is a structure that encapsulates both clients (agent and fetcher), agent object and logger object.
 type Proxy struct {
-	HttpClient      *http.Client
-	HttpAgentClient *http.Client
+	HTTPClient      *http.Client
+	HTTPAgentClient *http.Client
 	Log             *log.Logger
 	Agent           *Agent
 }
 
+// NewProxy returns a new Proxy object based on the provided agent configuration. The skip parameter is used to indicate if the client should ship server certificate verification.
 func NewProxy(agent *Agent, skip bool) *Proxy {
-	proxy := &Proxy{
-		HttpClient: NewClient(skip),
+	p := &Proxy{
+		HTTPClient: NewClient(skip),
 		Agent:      agent,
 		Log:        InitLogger(false),
 	}
 
 	if agent.Cert != nil {
-		proxy.HttpAgentClient = agent.NewAgentClient(skip)
+		p.HTTPAgentClient = agent.NewAgentClient(skip)
 	}
 
-	return proxy
+	return p
 }
 
+// Handler is the main HTTP handler for the proxy/agent server.
 func (p *Proxy) Handler(w http.ResponseWriter, req *http.Request) {
 	p.Log.Println("New request from:", req.RemoteAddr, "for URI:", req.URL.String())
 	// Log the time it takes to finish the request (for debugging)
-	defer TimeTrack(time.Now(), req.Method+" operation", p.Log)
+	defer timeTrack(time.Now(), req.Method+" operation", p.Log)
 
 	uri := req.FormValue("uri")
 	if len(uri) == 0 {
@@ -85,27 +88,27 @@ func (p *Proxy) Handler(w http.ResponseWriter, req *http.Request) {
 	var r *http.Response
 	r, err = p.NewRequest(req, user, authenticated)
 	if err != nil {
-		p.ExecError(w, err)
+		p.execError(w, err)
 		return
 	}
 	// the resource might have turned public, no need to remember it anymore
 	if r.StatusCode >= 200 && r.StatusCode <= 400 {
-		forgetUri(req.URL.String())
+		forgetURI(req.URL.String())
 	}
 	// Retry with server credentials if authentication is required
 	if r.StatusCode == 401 {
 		// Close the response to reuse the connection
 		defer r.Body.Close()
 
-		saved := rememberUri(req.URL.String())
+		saved := rememberURI(req.URL.String())
 		if saved {
 			p.Log.Println(req.URL.String(), "saved to auth list")
 		}
-		if len(user) > 0 && p.HttpAgentClient != nil {
+		if len(user) > 0 && p.HTTPAgentClient != nil {
 			authenticated = true
 			r, err = p.NewRequest(req, user, authenticated)
 			if err != nil {
-				p.ExecError(w, err)
+				p.execError(w, err)
 				return
 			}
 			defer r.Body.Close()
@@ -134,16 +137,18 @@ func (p *Proxy) Handler(w http.ResponseWriter, req *http.Request) {
 	return
 }
 
+// CopyHeaders is used to copy headers between two http.Header objects (usually two request/response objects)
 func CopyHeaders(from http.Header, to http.Header) {
 	for key, values := range from {
-		for _, value := range values {
-			if key != "User" || key != "Cookie" {
+		if key != "User" && key != "Cookie" {
+			for _, value := range values {
 				to.Set(key, value)
 			}
 		}
 	}
 }
 
+// NewRequest creates a new HTTP request for a given resource and user.
 func (p *Proxy) NewRequest(req *http.Request, user string, authenticated bool) (*http.Response, error) {
 	// prepare new request
 	request, err := http.NewRequest(req.Method, req.URL.String(), req.Body)
@@ -154,7 +159,7 @@ func (p *Proxy) NewRequest(req *http.Request, user string, authenticated bool) (
 
 	// build new response
 	if !authenticated || len(user) == 0 {
-		return p.HttpClient.Do(request)
+		return p.HTTPClient.Do(request)
 	}
 
 	request.Header.Set("On-Behalf-Of", user)
@@ -166,7 +171,7 @@ func (p *Proxy) NewRequest(req *http.Request, user string, authenticated bool) (
 		request.AddCookie(cookies[user][req.Host][0])
 	}
 	// perform the request
-	r, err := p.HttpAgentClient.Do(request)
+	r, err := p.HTTPAgentClient.Do(request)
 	if err != nil {
 		return r, err
 	}
@@ -188,7 +193,7 @@ func (p *Proxy) NewRequest(req *http.Request, user string, authenticated bool) (
 	return r, err
 }
 
-func rememberUri(uri string) bool {
+func rememberURI(uri string) bool {
 	if !privateUris[uri] {
 		privateUrisL.Lock()
 		privateUris[uri] = true
@@ -198,7 +203,7 @@ func rememberUri(uri string) bool {
 	return false
 }
 
-func forgetUri(uri string) bool {
+func forgetURI(uri string) bool {
 	if privateUris[uri] {
 		delete(privateUris, uri)
 		return true
@@ -213,38 +218,45 @@ func requiresAuth(uri string) bool {
 	return false
 }
 
-func (p *Proxy) ExecError(w http.ResponseWriter, err error) {
+func (p *Proxy) execError(w http.ResponseWriter, err error) {
 	p.Log.Println("Request execution error:", err)
 	w.WriteHeader(500)
 	w.Write([]byte(err.Error()))
 }
 
+// NewClient creates a new http.Client object to be used for fetching resources. The skip parameter is used to indicate if the client should ship server certificate verification.
 func NewClient(skip bool) *http.Client {
 	return &http.Client{
 		Transport: &http.Transport{
-			MaxIdleConnsPerHost: MaxIdleConnections,
+			MaxIdleConnsPerHost: maxIdleConnections,
 			TLSClientConfig: &tls.Config{
 				InsecureSkipVerify: skip,
 			},
 		},
-		Timeout: time.Duration(RequestTimeout) * time.Second,
+		Timeout: time.Duration(requestTimeout) * time.Second,
 	}
 }
 
+// NewAgentClient creates a new http.Client to be used for agent requests. The skip parameter is used to indicate if the client should ship server certificate verification.
 func (agent *Agent) NewAgentClient(skip bool) *http.Client {
 	return &http.Client{
 		Transport: &http.Transport{
-			MaxIdleConnsPerHost: MaxIdleConnections,
+			MaxIdleConnsPerHost: maxIdleConnections,
 			TLSClientConfig: &tls.Config{
 				Certificates:       []tls.Certificate{*agent.Cert},
 				InsecureSkipVerify: skip,
 			},
 		},
-		Timeout: time.Duration(RequestTimeout) * time.Second,
+		Timeout: time.Duration(requestTimeout) * time.Second,
 	}
 }
 
-func TimeTrack(start time.Time, name string, logger *log.Logger) {
+func timeTrack(start time.Time, name string, logger *log.Logger) {
 	elapsed := time.Since(start)
 	logger.Printf("%s finished in %s", name, elapsed)
+}
+
+// SetRequestTimeout sets the timeout value in seconds for all request
+func SetRequestTimeout(sec int) {
+	requestTimeout = sec
 }

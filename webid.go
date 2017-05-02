@@ -18,6 +18,7 @@ import (
 	"time"
 )
 
+// Agent is a structure which contains all the information necessary for WebID-TLS auth.
 type Agent struct {
 	WebID   string
 	Profile string
@@ -34,6 +35,7 @@ var (
 	rsaBits        = 2048
 )
 
+// NewAgent creates a new agent object using an existing WebID (URI)
 func NewAgent(uri string) (*Agent, error) {
 	agent := &Agent{
 		Log: InitLogger(false),
@@ -45,6 +47,7 @@ func NewAgent(uri string) (*Agent, error) {
 	return agent, nil
 }
 
+// NewAgentLocal creates a new agent object together with a full profile and certificate
 func NewAgentLocal(uri string, bits ...int) (*Agent, error) {
 	agent, err := NewAgent(uri)
 	if err != nil {
@@ -64,11 +67,11 @@ func NewAgentLocal(uri string, bits ...int) (*Agent, error) {
 	agent.Key = privKey
 
 	agent.Profile = NewAgentProfile(E, N)
-	agent.Cert, err = NewRSAcert(uri, "Solid Agent", privKey)
-
-	return agent, nil
+	agent.Cert, err = NewRSAcert(uri, "Solid Agent Cooper", privKey)
+	return agent, err
 }
 
+// NewRSAKey creates a new RSA key pair
 func NewRSAKey(bits int) (*rsa.PrivateKey, string, string, error) {
 	var e, n string
 	p, err := rsa.GenerateKey(rand.Reader, bits)
@@ -98,6 +101,9 @@ func NewAgentProfile(exp string, mod string) string {
 
 <#me>
     a <http://xmlns.com/foaf/0.1/Agent> ;
+    <http://xmlns.com/foaf/0.1/title> "Special agent" ;
+    <http://xmlns.com/foaf/0.1/name> "Cooper" ;
+    <http://xmlns.com/foaf/0.1/nick> "Coop" ;
     <http://www.w3.org/ns/auth/cert#key> <#key> .
 
 <#key>
@@ -159,7 +165,7 @@ func NewRSAcert(uri string, name string, priv *rsa.PrivateKey) (*tls.Certificate
 	return &cert, nil
 }
 
-func ExtractSANValue(cert *x509.Certificate) (string, error) {
+func extractSANValue(cert *x509.Certificate) (string, error) {
 	for _, x := range cert.Extensions {
 		if x.Id.Equal(subjectAltName) {
 			v := asn1.RawValue{}
@@ -167,35 +173,38 @@ func ExtractSANValue(cert *x509.Certificate) (string, error) {
 			if err != nil {
 				return "", err
 			}
-			sanUri := string(v.Bytes[2:])
-			if strings.HasPrefix(sanUri, "URI:") {
-				sanUri = strings.TrimSpace(sanUri[4:])
+			sanURI := string(v.Bytes[2:])
+			if strings.HasPrefix(sanURI, "URI:") {
+				sanURI = strings.TrimSpace(sanURI[4:])
 			}
-			return sanUri, nil
+			return sanURI, nil
 
 		}
 	}
 	return "", nil
 }
 
+// WebIDFromBytes takes a certificate and extracts the subjectAlternativeName value from it.
 func WebIDFromBytes(cert []byte) (string, error) {
 	parsed, err := x509.ParseCertificate(cert)
 	if err != nil {
 		return "", err
 	}
 
-	return ExtractSANValue(parsed)
+	return extractSANValue(parsed)
 }
 
+// WebIDFromCert returns a WebID value (URI) from a given tls.Certificate
 func WebIDFromCert(cert *tls.Certificate) (string, error) {
 	parsed, err := x509.ParseCertificate(cert.Certificate[0])
 	if err != nil {
 		return "", err
 	}
 
-	return ExtractSANValue(parsed)
+	return extractSANValue(parsed)
 }
 
+// WebIDFromReq takes an http.Request object and extracts the WebID value (URI) from it
 func WebIDFromReq(req *http.Request) (string, error) {
 	t := req.TLS
 
@@ -207,5 +216,5 @@ func WebIDFromReq(req *http.Request) (string, error) {
 		return "", errors.New("No client certificate found in the TLS request!")
 	}
 
-	return ExtractSANValue(t.PeerCertificates[0])
+	return extractSANValue(t.PeerCertificates[0])
 }

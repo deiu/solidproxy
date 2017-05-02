@@ -13,13 +13,16 @@ import (
 
 var (
 	testMockServer *httptest.Server
-	testUri        = "https://example.org"
+	testURI        = "https://example.org"
 )
 
 func init() {
 	// ** MOCK Server **
 	handler := MockServer()
 	// testMockServer = httptest.NewServer(handler)
+
+	// set timeout
+	SetRequestTimeout(3)
 
 	// testServer
 	testMockServer = httptest.NewUnstartedServer(handler)
@@ -107,6 +110,7 @@ func TestProxyMethodPOST(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, 200, resp.StatusCode)
 	body, err := ioutil.ReadAll(resp.Body)
+	assert.NoError(t, err)
 	resp.Body.Close()
 	assert.Equal(t, "POST", string(body))
 }
@@ -129,6 +133,7 @@ func TestProxyMethodPATCH(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, 200, resp.StatusCode)
 	body, err := ioutil.ReadAll(resp.Body)
+	assert.NoError(t, err)
 	resp.Body.Close()
 	assert.Equal(t, "PATCH", string(body))
 }
@@ -140,6 +145,7 @@ func TestProxyMethodDELETE(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, 200, resp.StatusCode)
 	body, err := ioutil.ReadAll(resp.Body)
+	assert.NoError(t, err)
 	resp.Body.Close()
 	assert.Equal(t, "DELETE", string(body))
 }
@@ -151,6 +157,7 @@ func TestProxyMethodOPTIONS(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, 200, resp.StatusCode)
 	body, err := ioutil.ReadAll(resp.Body)
+	assert.NoError(t, err)
 	resp.Body.Close()
 	assert.Equal(t, "OPTIONS", string(body))
 }
@@ -176,6 +183,7 @@ func TestProxyAuthenticated(t *testing.T) {
 	resp, err := testClient.Do(req)
 	assert.NoError(t, err)
 	body, err := ioutil.ReadAll(resp.Body)
+	assert.NoError(t, err)
 	resp.Body.Close()
 	assert.Equal(t, "foo", string(body))
 	assert.Equal(t, 200, resp.StatusCode)
@@ -187,6 +195,7 @@ func TestProxyAuthenticated(t *testing.T) {
 	resp, err = testClient.Do(req)
 	assert.NoError(t, err)
 	body, err = ioutil.ReadAll(resp.Body)
+	assert.NoError(t, err)
 	resp.Body.Close()
 	assert.Equal(t, "foo", string(body))
 	assert.Equal(t, 200, resp.StatusCode)
@@ -272,7 +281,7 @@ func TestProxyNoAgent(t *testing.T) {
 	assert.NoError(t, err)
 	proxy := NewProxy(agent, true)
 
-	assert.Nil(t, proxy.HttpAgentClient)
+	assert.Nil(t, proxy.HTTPAgentClient)
 
 	handler := NewProxyHandler(conf, proxy)
 	// testProxyServer
@@ -286,15 +295,29 @@ func TestProxyNoAgent(t *testing.T) {
 	assert.Equal(t, 401, resp.StatusCode)
 }
 
-func TestRememberUri(t *testing.T) {
-	assert.True(t, rememberUri(testUri))
+func TestCopyHeaders(t *testing.T) {
+	h1 := &http.Header{}
+	h1.Add("User", testAgentWebID)
+	h1.Add("Cookie", "abc")
+	h1.Add("Content-Type", "text/turtle")
+
+	h2 := &http.Header{}
+	CopyHeaders(*h1, *h2)
+
+	assert.Empty(t, h2.Get("User"))
+	assert.Empty(t, h2.Get("Cookie"))
+	assert.Equal(t, "text/turtle", h2.Get("Content-Type"))
+}
+
+func TestRememberURI(t *testing.T) {
+	assert.True(t, rememberURI(testURI))
 }
 
 func TestRequiresAuth(t *testing.T) {
-	assert.True(t, requiresAuth(testUri))
+	assert.True(t, requiresAuth(testURI))
 }
 
-func TestForgetUri(t *testing.T) {
-	assert.True(t, forgetUri(testUri))
-	assert.False(t, requiresAuth(testUri))
+func TestForgetURI(t *testing.T) {
+	assert.True(t, forgetURI(testURI))
+	assert.False(t, requiresAuth(testURI))
 }

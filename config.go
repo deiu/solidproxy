@@ -1,10 +1,13 @@
 package solidproxy
 
 const (
-	ServerVersion = "v2.1.1"
-	ServerName    = "SolidProxy"
+	// ServerVersion is used to display the server version number during HTTP requests
+	ServerVersion = "v2.1.2"
+	// ServerName is used to display the server name during HTTP requests
+	ServerName = "SolidProxy"
 )
 
+// ServerConfig contains all the configuration parameters for the proxy server
 type ServerConfig struct {
 	Verbose            bool
 	InsecureSkipVerify bool
@@ -16,6 +19,7 @@ type ServerConfig struct {
 	Port               string
 }
 
+// NewServerConfig creates a new ServerConfig object with a few default settings
 func NewServerConfig() *ServerConfig {
 	return &ServerConfig{
 		Verbose:            false,
@@ -26,14 +30,17 @@ func NewServerConfig() *ServerConfig {
 	}
 }
 
+// GetServerVersion returns the current server version
 func GetServerVersion() string {
 	return ServerVersion
 }
 
+// GetServerName returns the current server name
 func GetServerName() string {
 	return ServerName
 }
 
+// GetServerFullName returns the concatenated server name and version
 func GetServerFullName() string {
 	return ServerName + "-" + ServerVersion
 }

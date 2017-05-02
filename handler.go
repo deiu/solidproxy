@@ -8,6 +8,7 @@ import (
 	"os"
 )
 
+// InitLogger is used to initialize the log system; if verbose is set to false, it will discard all messages
 func InitLogger(verbose bool) *log.Logger {
 	logTo := ioutil.Discard
 	if verbose {
@@ -16,7 +17,7 @@ func InitLogger(verbose bool) *log.Logger {
 	return log.New(logTo, "[debug] ", log.Flags()|log.Lshortfile)
 }
 
-// NewServer creates a new server handler
+// NewProxyHandler creates a new server handler
 func NewProxyHandler(config *ServerConfig, proxy *Proxy) http.Handler {
 	logger := InitLogger(config.Verbose)
 	logger.Println("\n---- starting proxy server ----")
@@ -36,6 +37,7 @@ func NewProxyHandler(config *ServerConfig, proxy *Proxy) http.Handler {
 	return handler
 }
 
+// NewAgentHandler creates a new http.Handler object using the provided server configuration and agent object
 func NewAgentHandler(config *ServerConfig, agent *Agent) http.Handler {
 	logger := InitLogger(config.Verbose)
 	logger.Println("\n---- starting agent server ----")
@@ -51,6 +53,7 @@ func NewAgentHandler(config *ServerConfig, agent *Agent) http.Handler {
 	return handler
 }
 
+// NewTLSConfig creates an new tls.Config object based on the provided server configuration
 func NewTLSConfig(config *ServerConfig) (*tls.Config, error) {
 	TLSConfig := new(tls.Config)
 	TLSConfig.MinVersion = tls.VersionTLS12

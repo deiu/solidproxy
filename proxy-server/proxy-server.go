@@ -109,6 +109,7 @@ func main() {
 
 }
 
+// NewServer creates a new http.Server object with the provided Server configuration
 func NewServer(handler http.Handler, config *solidproxy.ServerConfig) (*http.Server, error) {
 	// Create proxy server listener and set config values
 	s := &http.Server{
