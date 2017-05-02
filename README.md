@@ -3,6 +3,8 @@
 [![](https://img.shields.io/badge/project-Solid-7C4DFF.svg?style=flat-square)](https://github.com/solid/solid)
 [![Build Status](https://travis-ci.org/solid/solidproxy.svg?branch=master)](https://travis-ci.org/solid/solidproxy)
 [![Coverage Status](https://coveralls.io/repos/github/solid/solidproxy/badge.svg?branch=master)](https://coveralls.io/github/solid/solidproxy?branch=master)
+[![Go report](https://goreportcard.com/badge/github.com/solid/solidproxy)](https://goreportcard.com/report/github.com/solid/solidproxy)
+
 
 Proxy server with authentication (for WebID-TLS delegation) that can be used as a micro-service along a Solid server.
 
