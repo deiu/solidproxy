@@ -27,6 +27,16 @@ type Agent struct {
 	Log     *log.Logger
 }
 
+// DigestAuthentication structure
+type RSAAuthentication struct {
+	Type, Source, Username, Realm, Nonce, URI, QOP, NC, CNonce, Response, Opaque, Algorithm string
+}
+
+// DigestAuthorization structure
+type RSAAuthorization struct {
+	Type, Source, Username, Nonce, Signature string
+}
+
 var (
 	err            error
 	subjectAltName = []int{2, 5, 29, 17}
@@ -217,4 +227,75 @@ func WebIDFromReq(req *http.Request) (string, error) {
 	}
 
 	return extractSANValue(t.PeerCertificates[0])
+}
+
+// ParseRSAAuthenticateHeader parses an Authenticate header and returns an RSAAuthentication object
+func ParseRSAAuthenticateHeader(header string) (*RSAAuthentication, error) {
+	var auth RSAAuthentication
+
+	if len(header) == 0 {
+		return auth, errors.New("Cannot parse WWW-Authenticate header: no header present")
+	}
+
+	opts := make(map[string]string)
+	parts := strings.SplitN(header, " ", 2)
+	opts["type"] = parts[0]
+	parts = strings.Split(parts[1], ",")
+
+	for _, part := range parts {
+		vals := strings.SplitN(strings.TrimSpace(part), "=", 2)
+		key := vals[0]
+		val := strings.Replace(vals[1], "\"", "", -1)
+		opts[key] = val
+	}
+
+	auth = &RSAAuthentication{
+		opts["type"],
+		opts["source"],
+		opts["username"],
+		opts["realm"],
+		opts["nonce"],
+		opts["uri"],
+		opts["qop"],
+		opts["nc"],
+		opts["qnonce"],
+		opts["response"],
+		opts["opaque"],
+		opts["algorithm"],
+	}
+	return auth, nil
+}
+
+// ParseRSAAuthorizationHeader parses an Authorization header and returns an RSAAuthorization object
+func ParseRSAAuthorizationHeader(header string) (*RSAAuthorization, error) {
+	auth := RSAAuthorization{}
+
+	if len(header) == 0 {
+		return &auth, errors.New("Cannot parse Authorization header: no header present")
+	}
+
+	opts := make(map[string]string)
+	parts := strings.SplitN(header, " ", 2)
+	opts["type"] = parts[0]
+	if opts["type"] != "WebID-RSA" {
+		return &auth, errors.New("Not a Digest authorization header. Got " + opts["type"])
+	}
+
+	parts = strings.Split(parts[1], ",")
+
+	for _, part := range parts {
+		vals := strings.SplitN(strings.TrimSpace(part), "=", 2)
+		key := vals[0]
+		val := strings.Replace(vals[1], "\"", "", -1)
+		opts[key] = val
+	}
+
+	auth = DigestAuthorization{
+		opts["type"],
+		opts["source"],
+		opts["username"],
+		opts["nonce"],
+		opts["sig"],
+	}
+	return &auth, nil
 }
