@@ -3,13 +3,12 @@ package solidproxy
 import (
 	"bytes"
 	"crypto/tls"
-	"errors"
-	"fmt"
 	"io"
 	"io/ioutil"
 	"log"
 	"net/http"
 	"net/url"
+	"strings"
 	"sync"
 	"time"
 )
@@ -72,6 +71,13 @@ func (p *Proxy) Handler(w http.ResponseWriter, req *http.Request) {
 		w.Write([]byte("HTTP 400 - Bad Request. You must provide a valid URI: " + req.URL.String()))
 		return
 	}
+	if !strings.HasPrefix(resource.Scheme, "http") {
+		p.Log.Println("Unsupported HTTP scheme: '" + resource.Scheme + "'")
+		w.WriteHeader(400)
+		w.Write([]byte("HTTP 400 - Bad Request. YUnsupported HTTP scheme: " + resource.Scheme))
+		return
+	}
+
 	// rewrite URL
 	req.URL = resource
 	req.Host = resource.Host
@@ -176,9 +182,7 @@ func (p *Proxy) NewRequest(req *http.Request, body io.ReadCloser, user string, a
 	// perform the request
 	r, err := p.HTTPAgentClient.Do(request)
 	if err != nil {
-		errMsg := fmt.Sprintf("%s failed with error message %s", request.Method, err.Error())
-		p.Log.Println(errMsg)
-		return r, errors.New(errMsg)
+		return r, err
 	}
 
 	// Store cookies per user and request host
