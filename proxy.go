@@ -141,7 +141,7 @@ func (p *Proxy) Handler(w http.ResponseWriter, req *http.Request) {
 		p.Log.Println("Request will use credentials for cached URI:", req.URL.String())
 	}
 
-	p.Log.Println("Proxying request for URI:", req.URL, "and user:", user, "using Agent:", p.Agent.WebID)
+	p.Log.Println("Proxying", req.Method, "request for URI:", req.URL, "and user:", user, "using Agent:", p.Agent.WebID)
 
 	// build new response
 	var r *http.Response
@@ -157,7 +157,7 @@ func (p *Proxy) Handler(w http.ResponseWriter, req *http.Request) {
 	// Retry with server credentials if authentication is required
 	if r.StatusCode == 401 {
 		// Close the response to reuse the connection
-		defer r.Body.Close()
+		r.Body.Close()
 
 		saved := rememberURI(req.URL.String())
 		if saved {
@@ -278,7 +278,7 @@ func requiresAuth(uri string) bool {
 }
 
 func (p *Proxy) execError(w http.ResponseWriter, err error) {
-	p.Log.Println("Request execution error:", err)
+	p.Log.Println("Request execution error on the proxy:", err)
 	w.WriteHeader(500)
 	w.Write([]byte(err.Error()))
 }
