@@ -1,66 +1,11 @@
-// Copyright 2017 Andrei Sambra and the Solid Project team. All rights reserved.
-// Use of this source code is governed by an MIT-style license that can be found
-// in the LICENSE file.
-
-// Package solidproxy is a transparent browser that can handle WebID-TLS delegated
-// auth for resources that require authentication.
-//
-// A trivial example is:
-//
-// package main
-
-// import (
-// 	"log"
-// 	"net/http"
-// 	"os"
-
-// 	"github.com/solid/solidproxy"
-// )
-
-// func main() {
-// 	mux := http.NewServeMux()
-
-// 	// Init logger
-// 	logger := log.New(os.Stderr, "[debug] ", log.Flags()|log.Lshortfile)
-
-// 	// Next we create a new (local) agent object with its corresponding key
-// 	// pair and profile document and serve it under /agent
-// 	// Alternatively, we can create a "remote" agent to which we need to
-// 	// provide a cert (tls.Certificate) you can load from somewhere:
-// 	// agent, err := solidproxy.NewAgent("https://example.org/agent#me")
-// 	// agent.Cert = someTLScert
-
-// 	agent, err := solidproxy.NewAgentLocal("http://localhost:8080/agent#me")
-// 	if err != nil {
-// 		log.Println("Error creating new agent:", err.Error())
-// 		return
-// 	}
-// 	// assign logger
-// 	agent.Log = logger
-
-// 	// Skip verifying trust chain for certificates?
-// 	// Use true when dealing with self-signed certs (testing, etc.)
-// 	insecureSkipVerify := true
-// 	// Create a new proxy object
-// 	proxy := solidproxy.NewProxy(agent, insecureSkipVerify)
-// 	// assign logger
-// 	proxy.Log = logger
-
-// 	// Prepare proxy handler and serve it at http://localhost:8080/proxy
-// 	mux.HandleFunc("/proxy", proxy.Handler)
-
-// 	// The handleAgent is only needed if you plan to serve the agent's WebID
-// 	// profile yourself; it will be available at http://localhost:8080/agent
-// 	mux.HandleFunc("/agent", agent.Handler)
-
-// 	logger.Println("Listening...")
-// 	http.ListenAndServe(":8080", mux)
-// }
-
 package solidproxy
 
 import (
+	"bytes"
 	"crypto/tls"
+	"errors"
+	"fmt"
+	"io"
 	"io/ioutil"
 	"log"
 	"net/http"
@@ -143,34 +88,44 @@ func (p *Proxy) Handler(w http.ResponseWriter, req *http.Request) {
 
 	p.Log.Println("Proxying", req.Method, "request for URI:", req.URL, "and user:", user, "using Agent:", p.Agent.WebID)
 
+	// copy body for reuse
+	buf, _ := ioutil.ReadAll(req.Body)
+	reqBody := ioutil.NopCloser(bytes.NewBuffer(buf))
+
 	// build new response
 	var r *http.Response
-	r, err = p.NewRequest(req, user, authenticated)
+	r, err = p.NewRequest(req, reqBody, user, authenticated)
 	if err != nil {
 		p.execError(w, err)
 		return
 	}
+	p.Log.Println("Response received with HTTP status", r.StatusCode)
+
 	// the resource might have turned public, no need to remember it anymore
 	if r.StatusCode >= 200 && r.StatusCode <= 400 {
 		forgetURI(req.URL.String())
 	}
+	// r.Body will be empty at worst, so it should never trigger an error
+	body, _ := ioutil.ReadAll(r.Body)
+	// Close the response to reuse the connection
+	r.Body.Close()
+
 	// Retry with server credentials if authentication is required
 	if r.StatusCode == 401 {
-		// Close the response to reuse the connection
-		r.Body.Close()
-
 		saved := rememberURI(req.URL.String())
 		if saved {
 			p.Log.Println(req.URL.String(), "saved to auth list")
 		}
 		if len(user) > 0 && p.HTTPAgentClient != nil {
-			authenticated = true
-			r, err = p.NewRequest(req, user, authenticated)
+			r, err = p.NewRequest(req, reqBody, user, true)
 			if err != nil {
 				p.execError(w, err)
 				return
 			}
-			defer r.Body.Close()
+			// r.Body will be empty at worst, so it should never trigger an error
+			body, _ = ioutil.ReadAll(r.Body)
+			// Close body
+			r.Body.Close()
 		}
 	}
 
@@ -188,29 +143,16 @@ func (p *Proxy) Handler(w http.ResponseWriter, req *http.Request) {
 	CopyHeaders(r.Header, w.Header())
 
 	w.WriteHeader(r.StatusCode)
-	// r.Body will be empty at worst, so it should never trigger an error
-	body, _ := ioutil.ReadAll(r.Body)
 	w.Write(body)
 
 	p.Log.Println("Response received with HTTP status", r.StatusCode)
 	return
 }
 
-// CopyHeaders is used to copy headers between two http.Header objects (usually two request/response objects)
-func CopyHeaders(from http.Header, to http.Header) {
-	for key, values := range from {
-		if key != "User" && key != "Cookie" {
-			for _, value := range values {
-				to.Set(key, value)
-			}
-		}
-	}
-}
-
 // NewRequest creates a new HTTP request for a given resource and user.
-func (p *Proxy) NewRequest(req *http.Request, user string, authenticated bool) (*http.Response, error) {
+func (p *Proxy) NewRequest(req *http.Request, body io.ReadCloser, user string, authenticated bool) (*http.Response, error) {
 	// prepare new request
-	request, err := http.NewRequest(req.Method, req.URL.String(), req.Body)
+	request, err := http.NewRequest(req.Method, req.URL.String(), body)
 	// copy headers
 	CopyHeaders(req.Header, request.Header)
 	// overwrite User Agent
@@ -227,12 +169,16 @@ func (p *Proxy) NewRequest(req *http.Request, user string, authenticated bool) (
 	// Retry the request
 	if len(cookies[user]) > 0 && len(cookies[user][req.Host]) > 0 { // Use existing cookie
 		solutionMsg = "Retrying with cookies"
-		request.AddCookie(cookies[user][req.Host][0])
+		for _, c := range cookies[user][req.Host] {
+			request.AddCookie(c)
+		}
 	}
 	// perform the request
 	r, err := p.HTTPAgentClient.Do(request)
 	if err != nil {
-		return r, err
+		errMsg := fmt.Sprintf("%s failed with error message %s", request.Method, err.Error())
+		p.Log.Println(errMsg)
+		return r, errors.New(errMsg)
 	}
 
 	// Store cookies per user and request host
@@ -241,7 +187,7 @@ func (p *Proxy) NewRequest(req *http.Request, user string, authenticated bool) (
 		// TODO: should store cookies based on domain value AND path from cookie
 		cookies[user] = map[string][]*http.Cookie{}
 		cookies[user][req.Host] = r.Cookies()
-		p.Log.Printf("Cookies: %+v\n", cookies)
+		p.Log.Printf("Set cookies: %+v\n", cookies)
 		cookiesL.Unlock()
 	}
 	p.Log.Println("Resource "+request.URL.String(),
@@ -250,6 +196,17 @@ func (p *Proxy) NewRequest(req *http.Request, user string, authenticated bool) (
 
 	p.Log.Println("Got authenticated response code:", r.StatusCode)
 	return r, err
+}
+
+// CopyHeaders is used to copy headers between two http.Header objects (usually two request/response objects)
+func CopyHeaders(from http.Header, to http.Header) {
+	for key, values := range from {
+		if key != "User" && key != "Cookie" {
+			for _, value := range values {
+				to.Set(key, value)
+			}
+		}
+	}
 }
 
 func rememberURI(uri string) bool {
