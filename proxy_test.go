@@ -45,6 +45,7 @@ func setOrigin(w http.ResponseWriter, req *http.Request) {
 func MockServer() http.Handler {
 	// Create new handler
 	handler := http.NewServeMux()
+
 	handler.Handle("/401", http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 		setOrigin(w, req)
 		user := req.Header.Get("On-Behalf-Of")
@@ -100,6 +101,22 @@ func MockServer() http.Handler {
 		return
 	}))
 
+	handler.Handle("/patch", http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		setOrigin(w, req)
+		// copy body for reuse in subsequent requests
+		buf, _ := ioutil.ReadAll(req.Body)
+		if req.Header.Get("Content-Length") == "0" || len(buf) == 0 {
+			w.WriteHeader(400)
+			w.Write([]byte("Empty patch body. Length:" + req.Header.Get("Content-Length")))
+			w.Write(buf)
+			return
+		}
+
+		w.WriteHeader(200)
+		w.Write(buf)
+		return
+	}))
+
 	return handler
 }
 
@@ -127,15 +144,27 @@ func TestProxyMethodPUT(t *testing.T) {
 }
 
 func TestProxyMethodPATCH(t *testing.T) {
-	req, err := http.NewRequest("PATCH", testProxyServer.URL+"/proxy?uri="+testMockServer.URL+"/method", nil)
+	sparqlData := `INSERT DATA { <http://a.com> <http://b.com> <http://c.com> . }`
+	req, err := http.NewRequest("PATCH", testProxyServer.URL+"/proxy?uri="+testMockServer.URL+"/patch", strings.NewReader(sparqlData))
 	assert.NoError(t, err)
+	req.Header.Add("Content-Type", "application/sparql-update")
 	resp, err := testClient.Do(req)
 	assert.NoError(t, err)
 	assert.Equal(t, 200, resp.StatusCode)
 	body, err := ioutil.ReadAll(resp.Body)
 	assert.NoError(t, err)
 	resp.Body.Close()
-	assert.Equal(t, "PATCH", string(body))
+	assert.Equal(t, sparqlData, string(body))
+
+	req, err = http.NewRequest("PATCH", testProxyServer.URL+"/proxy?uri="+testMockServer.URL+"/patch", strings.NewReader(""))
+	assert.NoError(t, err)
+	req.Header.Add("Content-Type", "application/sparql-update")
+	resp, err = testClient.Do(req)
+	assert.NoError(t, err)
+	assert.Equal(t, 400, resp.StatusCode)
+	body, err = ioutil.ReadAll(resp.Body)
+	assert.NoError(t, err)
+	resp.Body.Close()
 }
 
 func TestProxyMethodDELETE(t *testing.T) {

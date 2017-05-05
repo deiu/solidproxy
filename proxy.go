@@ -3,7 +3,7 @@ package solidproxy
 import (
 	"bytes"
 	"crypto/tls"
-	"io"
+	"fmt"
 	"io/ioutil"
 	"log"
 	"net/http"
@@ -94,13 +94,16 @@ func (p *Proxy) Handler(w http.ResponseWriter, req *http.Request) {
 
 	p.Log.Println("Proxying", req.Method, "request for URI:", req.URL, "and user:", user, "using Agent:", p.Agent.WebID)
 
-	// copy body for reuse
-	buf, _ := ioutil.ReadAll(req.Body)
-	reqBody := ioutil.NopCloser(bytes.NewBuffer(buf))
+	// copy body for reuse in subsequent requests
+	bodyBuffer, _ := ioutil.ReadAll(req.Body)
+	req.Body.Close()
+	if len(bodyBuffer) > 0 {
+		p.Log.Println("Got a payload of", fmt.Sprintf("%d", len(bodyBuffer)))
+	}
 
 	// build new response
 	var r *http.Response
-	r, err = p.NewRequest(req, reqBody, user, authenticated)
+	r, err = p.NewRequest(req, bodyBuffer, user, authenticated)
 	if err != nil {
 		p.execError(w, err)
 		return
@@ -123,7 +126,7 @@ func (p *Proxy) Handler(w http.ResponseWriter, req *http.Request) {
 			p.Log.Println(req.URL.String(), "saved to auth list")
 		}
 		if len(user) > 0 && p.HTTPAgentClient != nil {
-			r, err = p.NewRequest(req, reqBody, user, true)
+			r, err = p.NewRequest(req, bodyBuffer, user, true)
 			if err != nil {
 				p.execError(w, err)
 				return
@@ -156,13 +159,16 @@ func (p *Proxy) Handler(w http.ResponseWriter, req *http.Request) {
 }
 
 // NewRequest creates a new HTTP request for a given resource and user.
-func (p *Proxy) NewRequest(req *http.Request, body io.ReadCloser, user string, authenticated bool) (*http.Response, error) {
+func (p *Proxy) NewRequest(req *http.Request, body []byte, user string, authenticated bool) (*http.Response, error) {
+	reqBody := ioutil.NopCloser(bytes.NewBuffer(body))
 	// prepare new request
-	request, err := http.NewRequest(req.Method, req.URL.String(), body)
+	request, err := http.NewRequest(req.Method, req.URL.String(), reqBody)
 	// copy headers
 	CopyHeaders(req.Header, request.Header)
 	// overwrite User Agent
 	request.Header.Set("User-Agent", GetServerFullName())
+	// set the right content length header
+	request.Header.Set("Content-Length", fmt.Sprintf("%s", len(body)))
 
 	// build new response
 	if !authenticated || len(user) == 0 {
