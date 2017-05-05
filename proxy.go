@@ -192,6 +192,7 @@ func (p *Proxy) NewRequest(req *http.Request, body []byte, user string, authenti
 		println("retrying with WebID-RSA")
 		auth, err := ParseRSAAuthenticateHeader(authHeader)
 		if err == nil {
+			auth.Username = p.Agent.WebID
 			authz, err := p.Agent.NewRSAAuthorizationHeader(auth)
 			if err == nil {
 				request.Header.Set("Authorization", authz)
