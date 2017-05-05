@@ -1,7 +1,9 @@
 package solidproxy
 
 import (
+	"crypto/sha1"
 	"crypto/tls"
+	"encoding/base64"
 	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
@@ -43,6 +45,8 @@ func setOrigin(w http.ResponseWriter, req *http.Request) {
 }
 
 func MockServer() http.Handler {
+	nonce := "abc123"
+
 	// Create new handler
 	handler := http.NewServeMux()
 
@@ -50,6 +54,9 @@ func MockServer() http.Handler {
 		setOrigin(w, req)
 		user := req.Header.Get("On-Behalf-Of")
 		if len(user) == 0 {
+			wwwAuth := `WebID-RSA source="` + req.Host + `", nonce="` + nonce + `"`
+			w.Header().Set("WWW-Authenticate", wwwAuth)
+
 			w.WriteHeader(401)
 			w.Write([]byte("Authentication required"))
 			return
@@ -61,6 +68,33 @@ func MockServer() http.Handler {
 				w.Write([]byte("Bad cookie credentials"))
 				return
 			}
+			w.WriteHeader(200)
+			w.Write([]byte("foo"))
+			return
+		}
+		if len(req.Header.Get("Authorization")) > 0 {
+			println(req.Header.Get("Authorization"))
+			// check authz
+			authH, err := parseRSAAuthorizationHeader(req.Header.Get("Authorization"))
+			if err != nil {
+				w.WriteHeader(403)
+				w.Write([]byte("Bad WebID-RSA authorization credentials"))
+				return
+			}
+
+			claim := sha1.Sum([]byte(authH.Source + authH.Username + authH.Nonce))
+			signature, err := base64.StdEncoding.DecodeString(authH.Signature)
+
+			parser, err := ParseRSAPublicPEMKey(testPubKey)
+			if err == nil {
+				err = parser.Verify(claim[:], signature)
+				if err != nil {
+					w.WriteHeader(403)
+					w.Write([]byte("Can't verify WebID-RSA signature. " + err.Error()))
+					return
+				}
+			}
+
 			w.WriteHeader(200)
 			w.Write([]byte("foo"))
 			return
@@ -139,6 +173,7 @@ func TestProxyMethodPUT(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, 200, resp.StatusCode)
 	body, err := ioutil.ReadAll(resp.Body)
+	assert.NoError(t, err)
 	resp.Body.Close()
 	assert.Equal(t, "PUT", string(body))
 }
@@ -162,7 +197,7 @@ func TestProxyMethodPATCH(t *testing.T) {
 	resp, err = testClient.Do(req)
 	assert.NoError(t, err)
 	assert.Equal(t, 400, resp.StatusCode)
-	body, err = ioutil.ReadAll(resp.Body)
+	_, err = ioutil.ReadAll(resp.Body)
 	assert.NoError(t, err)
 	resp.Body.Close()
 }

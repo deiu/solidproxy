@@ -102,8 +102,9 @@ func (p *Proxy) Handler(w http.ResponseWriter, req *http.Request) {
 	}
 
 	// build new response
+	var authHeader string
 	var r *http.Response
-	r, err = p.NewRequest(req, bodyBuffer, user, authenticated)
+	r, err = p.NewRequest(req, bodyBuffer, user, authenticated, authHeader)
 	if err != nil {
 		p.execError(w, err)
 		return
@@ -126,7 +127,10 @@ func (p *Proxy) Handler(w http.ResponseWriter, req *http.Request) {
 			p.Log.Println(req.URL.String(), "saved to auth list")
 		}
 		if len(user) > 0 && p.HTTPAgentClient != nil {
-			r, err = p.NewRequest(req, bodyBuffer, user, true)
+			if len(r.Header.Get("WWW-Authenticate")) > 0 {
+				authHeader = r.Header.Get("WWW-Authenticate")
+			}
+			r, err = p.NewRequest(req, bodyBuffer, user, true, authHeader)
 			if err != nil {
 				p.execError(w, err)
 				return
@@ -159,16 +163,16 @@ func (p *Proxy) Handler(w http.ResponseWriter, req *http.Request) {
 }
 
 // NewRequest creates a new HTTP request for a given resource and user.
-func (p *Proxy) NewRequest(req *http.Request, body []byte, user string, authenticated bool) (*http.Response, error) {
+func (p *Proxy) NewRequest(req *http.Request, body []byte, user string, authenticated bool, authHeader string) (*http.Response, error) {
 	reqBody := ioutil.NopCloser(bytes.NewBuffer(body))
 	// prepare new request
-	request, err := http.NewRequest(req.Method, req.URL.String(), reqBody)
+	request, _ := http.NewRequest(req.Method, req.URL.String(), reqBody)
 	// copy headers
 	CopyHeaders(req.Header, request.Header)
 	// overwrite User Agent
 	request.Header.Set("User-Agent", GetServerFullName())
 	// set the right content length header
-	request.Header.Set("Content-Length", fmt.Sprintf("%s", len(body)))
+	request.Header.Set("Content-Length", fmt.Sprintf("%d", len(body)))
 
 	// build new response
 	if !authenticated || len(user) == 0 {
@@ -176,7 +180,7 @@ func (p *Proxy) NewRequest(req *http.Request, body []byte, user string, authenti
 	}
 
 	request.Header.Set("On-Behalf-Of", user)
-	solutionMsg := "Retrying with WebID-TLS"
+	solutionMsg := "Retrying with credentials"
 
 	// Retry the request
 	if len(cookies[user]) > 0 && len(cookies[user][req.Host]) > 0 { // Use existing cookie
@@ -184,7 +188,17 @@ func (p *Proxy) NewRequest(req *http.Request, body []byte, user string, authenti
 		for _, c := range cookies[user][req.Host] {
 			request.AddCookie(c)
 		}
+	} else if len(authHeader) > 0 {
+		println("retrying with WebID-RSA")
+		auth, err := ParseRSAAuthenticateHeader(authHeader)
+		if err == nil {
+			authz, err := p.Agent.NewRSAAuthorizationHeader(auth)
+			if err == nil {
+				request.Header.Set("Authorization", authz)
+			}
+		}
 	}
+
 	// perform the request
 	r, err := p.HTTPAgentClient.Do(request)
 	if err != nil {
