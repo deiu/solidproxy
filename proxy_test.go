@@ -309,6 +309,16 @@ func TestCopyHeaders(t *testing.T) {
 	assert.Equal(t, "text/turtle", h2.Get("Content-Type"))
 }
 
+func TestMultiCookie(t *testing.T) {
+	req, err := http.NewRequest("GET", "example.org", nil)
+	assert.NoError(t, err)
+	c1 := &http.Cookie{Name: "sample", Value: "test", HttpOnly: false}
+	req.AddCookie(c1)
+	c2 := &http.Cookie{Name: "Session", Value: "sample", HttpOnly: false}
+	req.AddCookie(c2)
+	assert.Equal(t, 2, len(req.Cookies()))
+}
+
 func TestRememberURI(t *testing.T) {
 	assert.True(t, rememberURI(testURI))
 }

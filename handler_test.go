@@ -120,6 +120,20 @@ func TestRouteProxyEmptyURIValue(t *testing.T) {
 	assert.Equal(t, 400, resp.StatusCode)
 }
 
+func TestRouteProxyBadURIValue(t *testing.T) {
+	req, err := http.NewRequest("GET", testProxyServer.URL+"/proxy?uri=/abc", nil)
+	assert.NoError(t, err)
+	resp, err := testClient.Do(req)
+	assert.NoError(t, err)
+	assert.Equal(t, 400, resp.StatusCode)
+
+	req, err = http.NewRequest("GET", testProxyServer.URL+"/proxy?uri=abc", nil)
+	assert.NoError(t, err)
+	resp, err = testClient.Do(req)
+	assert.NoError(t, err)
+	assert.Equal(t, 400, resp.StatusCode)
+}
+
 func TestLogger(t *testing.T) {
 	config := NewServerConfig()
 	config.Verbose = true
