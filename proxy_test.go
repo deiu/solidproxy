@@ -33,7 +33,6 @@ func init() {
 	testMockServer.TLS.NextProtos = []string{"http/1.1"}
 	testMockServer.StartTLS()
 	testMockServer.URL = strings.Replace(testMockServer.URL, "127.0.0.1", "localhost", 1)
-	println(testMockServer.URL)
 }
 
 func setOrigin(w http.ResponseWriter, req *http.Request) {
@@ -73,7 +72,6 @@ func MockServer() http.Handler {
 			return
 		}
 		if len(req.Header.Get("Authorization")) > 0 {
-			println(req.Header.Get("Authorization"))
 			// check authz
 			authH, err := parseRSAAuthorizationHeader(req.Header.Get("Authorization"))
 			if err != nil {
