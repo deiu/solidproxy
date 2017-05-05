@@ -282,7 +282,7 @@ func (agent *Agent) NewRSAAuthorizationHeader(auth *RSAAuthentication) (string, 
 
 	b64Sig := base64.StdEncoding.EncodeToString(signed)
 
-	header := `WebID-RSA source="` + auth.Source + `", \nusername="` + auth.Username + `", \nnonce="` + auth.Nonce + `",\n sig="` + b64Sig + `"`
+	header := `WebID-RSA source="` + auth.Source + `", username="` + auth.Username + `", nonce="` + auth.Nonce + `", sig="` + b64Sig + `"`
 
 	return header, nil
 }
