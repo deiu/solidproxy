@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"io/ioutil"
 	"log"
 	"net/http"
@@ -65,7 +66,15 @@ func main() {
 	}
 	// Agent config
 	if len(os.Getenv("SOLIDPROXY_AGENTPORT")) > 0 {
-		configAgent.Port = os.Getenv("SOLIDPROXY_AGENTPORT") // default= :3200
+		// default= :3200
+		configAgent.Port = os.Getenv("SOLIDPROXY_AGENTPORT")
+	}
+	if len(os.Getenv("REQUEST_TIMEOUT")) > 0 {
+		// default=2s
+		tOut, err := fmt.Printf("%d", os.Getenv("REQUEST_TIMEOUT"))
+		if err == nil {
+			solidproxy.SetRequestTimeout(tOut)
+		}
 	}
 
 	// Create new agent
