@@ -75,9 +75,8 @@ func newSignerFromKey(k interface{}) (Signer, error) {
 	var sKey Signer
 	switch t := k.(type) {
 	case *rsa.PrivateKey:
+		// we only support one type
 		sKey = &rsaPrivKey{t}
-	default:
-		return nil, fmt.Errorf("Unsupported key type %T", k)
 	}
 	return sKey, nil
 }
@@ -86,9 +85,8 @@ func newVerifierFromKey(k interface{}) (Verifier, error) {
 	var vKey Verifier
 	switch t := k.(type) {
 	case *rsa.PublicKey:
+		// we only support one type
 		vKey = &rsaPubKey{t}
-	default:
-		return nil, fmt.Errorf("Unsupported key type %T", k)
 	}
 	return vKey, nil
 }

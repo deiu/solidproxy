@@ -3,6 +3,7 @@ package solidproxy
 import (
 	"bytes"
 	"crypto/tls"
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"log"
@@ -23,7 +24,7 @@ var (
 
 	privateUris    = map[string]bool{}
 	privateUrisL   = new(sync.RWMutex)
-	requestTimeout = 2
+	requestTimeout = 3
 )
 
 // Proxy is a structure that encapsulates both clients (agent and fetcher), agent object and logger object.
@@ -139,6 +140,14 @@ func (p *Proxy) Handler(w http.ResponseWriter, req *http.Request) {
 			body, _ = ioutil.ReadAll(r.Body)
 			// Close body
 			r.Body.Close()
+
+			// clear cookie in case it expired
+			if r.StatusCode == 401 {
+				err = forgetCookie(req, user, cookiesL, cookies)
+				if err != nil {
+					p.Log.Println("Could not remove cookie.", err.Error())
+				}
+			}
 		}
 	}
 
@@ -180,7 +189,7 @@ func (p *Proxy) NewRequest(req *http.Request, body []byte, user string, authenti
 	}
 
 	request.Header.Set("On-Behalf-Of", user)
-	solutionMsg := "Retrying with credentials"
+	solutionMsg := "Retrying with WebID-TLS"
 
 	// Retry the request
 	if len(cookies[user]) > 0 && len(cookies[user][req.Host]) > 0 { // Use existing cookie
@@ -196,6 +205,7 @@ func (p *Proxy) NewRequest(req *http.Request, body []byte, user string, authenti
 			if err == nil {
 				request.Header.Set("Authorization", authz)
 			}
+			solutionMsg = "Retrying with WebID-RSA"
 		}
 	}
 
@@ -249,6 +259,18 @@ func forgetURI(uri string) bool {
 		return true
 	}
 	return false
+}
+
+func forgetCookie(req *http.Request, user string, cookiesL *sync.RWMutex, cookies map[string]map[string][]*http.Cookie) error {
+	// Find if cookies exists
+	cookiesL.Lock()
+	if len(cookies[user]) > 0 && len(cookies[user][req.Host]) > 0 {
+		delete(cookies[user], req.Host)
+		cookiesL.Unlock()
+		return nil
+	}
+	cookiesL.Unlock()
+	return errors.New("No cookies found for user: " + user + " and host: " + req.Host)
 }
 
 func requiresAuth(uri string) bool {

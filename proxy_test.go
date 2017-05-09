@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -49,63 +50,24 @@ func MockServer() http.Handler {
 	// Create new handler
 	handler := http.NewServeMux()
 
-	handler.Handle("/401", http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+	handler.Handle("/webid-tls", http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 		setOrigin(w, req)
 		user := req.Header.Get("On-Behalf-Of")
 		if len(user) == 0 {
-			wwwAuth := `WebID-RSA source="` + req.Host + `", nonce="` + nonce + `"`
-			w.Header().Set("WWW-Authenticate", wwwAuth)
-
 			w.WriteHeader(401)
-			w.Write([]byte("Authentication required"))
-			return
-		}
-		if len(req.Cookies()) > 0 {
-			cc := req.Cookies()[0]
-			if cc.Name != "sample" && cc.Value != "sample" {
-				w.WriteHeader(403)
-				w.Write([]byte("Bad cookie credentials"))
-				return
-			}
-			w.WriteHeader(200)
-			w.Write([]byte("foo"))
-			return
-		}
-		if len(req.Header.Get("Authorization")) > 0 {
-			// check authz
-			authH, err := parseRSAAuthorizationHeader(req.Header.Get("Authorization"))
-			if err != nil {
-				w.WriteHeader(403)
-				w.Write([]byte("Bad WebID-RSA authorization credentials"))
-				return
-			}
-
-			claim := sha1.Sum([]byte(authH.Source + authH.Username + authH.Nonce))
-			signature, err := base64.StdEncoding.DecodeString(authH.Signature)
-
-			parser, err := ParseRSAPublicPEMKey(testPubKey)
-			if err == nil {
-				err = parser.Verify(claim[:], signature)
-				if err != nil {
-					w.WriteHeader(403)
-					w.Write([]byte("Can't verify WebID-RSA signature. " + err.Error()))
-					return
-				}
-			}
-
-			w.WriteHeader(200)
-			w.Write([]byte("foo"))
+			w.Write([]byte("No User header found"))
 			return
 		}
 
 		webid, err := WebIDFromReq(req)
 		if err != nil {
+			w.WriteHeader(400)
 			w.Write([]byte("\n" + err.Error()))
 			return
 		}
 		if len(webid) > 0 {
 			// set cookie
-			cookie := &http.Cookie{Name: "sample", Value: "sample", HttpOnly: false}
+			cookie := &http.Cookie{Name: "sample-name", Value: "sample-value", HttpOnly: false}
 			http.SetCookie(w, cookie)
 			w.WriteHeader(200)
 			w.Header().Set("User", webid)
@@ -115,6 +77,75 @@ func MockServer() http.Handler {
 
 		w.WriteHeader(401)
 		w.Write([]byte("Authentication required"))
+		return
+	}))
+
+	handler.Handle("/cookies", http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		setOrigin(w, req)
+		user := req.Header.Get("On-Behalf-Of")
+		if len(user) == 0 {
+			w.WriteHeader(401)
+			w.Write([]byte("No User header found"))
+			return
+		}
+
+		if len(req.Cookies()) > 0 {
+			cc := req.Cookies()[0]
+			if cc.Name != "sample-name" && cc.Value != "sample-value" {
+				w.WriteHeader(401)
+				w.Write([]byte("Bad cookie credentials"))
+				return
+			}
+			w.WriteHeader(200)
+			w.Write([]byte("foo"))
+			return
+		}
+
+		w.Header().Set("User-Agent-Received", req.Header.Get("User-Agent"))
+		w.WriteHeader(401)
+		w.Write([]byte("Authentication required"))
+		return
+	}))
+
+	handler.Handle("/webid-rsa", http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		setOrigin(w, req)
+		user := req.Header.Get("On-Behalf-Of")
+		if len(req.Header.Get("Authorization")) == 0 {
+			wwwAuth := `WebID-RSA source="` + req.Host + `", nonce="` + nonce + `"`
+			w.Header().Set("WWW-Authenticate", wwwAuth)
+
+			w.WriteHeader(401)
+			w.Write([]byte("Authentication required"))
+			return
+		}
+		// check authz
+		authH, err := parseRSAAuthorizationHeader(req.Header.Get("Authorization"))
+		if err != nil {
+			w.WriteHeader(401)
+			w.Write([]byte("Bad WebID-RSA authorization credentials"))
+			return
+		}
+
+		claim := sha1.Sum([]byte(authH.Source + authH.Username + authH.Nonce))
+		signature, err := base64.StdEncoding.DecodeString(authH.Signature)
+
+		parser, err := ParseRSAPublicPEMKey(testPubKey)
+		if err == nil {
+			err = parser.Verify(claim[:], signature)
+			if err != nil {
+				w.WriteHeader(401)
+				w.Write([]byte("Can't verify WebID-RSA signature. " + err.Error()))
+				return
+			}
+		}
+
+		// set cookie
+		cookie := &http.Cookie{Name: "bad-name", Value: "bad-value", HttpOnly: false}
+		http.SetCookie(w, cookie)
+		w.WriteHeader(200)
+		w.Header().Set("User-Agent-Received", req.Header.Get("User-Agent"))
+		w.Header().Set("User", user)
+		w.Write([]byte("foo"))
 		return
 	}))
 
@@ -239,7 +270,7 @@ func TestProxyHeaders(t *testing.T) {
 func TestProxyAuthenticated(t *testing.T) {
 	alice := "https://alice.com/profile#me"
 
-	req, err := http.NewRequest("GET", testProxyServer.URL+"/proxy?uri="+testMockServer.URL+"/401", nil)
+	req, err := http.NewRequest("GET", testProxyServer.URL+"/proxy?uri="+testMockServer.URL+"/webid-tls", nil)
 	assert.NoError(t, err)
 	req.Header.Set("User", alice)
 	resp, err := testClient.Do(req)
@@ -251,7 +282,7 @@ func TestProxyAuthenticated(t *testing.T) {
 	assert.Equal(t, 200, resp.StatusCode)
 
 	// retry with cookie
-	req, err = http.NewRequest("GET", testProxyServer.URL+"/proxy?uri="+testMockServer.URL+"/401", nil)
+	req, err = http.NewRequest("GET", testProxyServer.URL+"/proxy?uri="+testMockServer.URL+"/cookies", nil)
 	assert.NoError(t, err)
 	req.Header.Set("User", alice)
 	resp, err = testClient.Do(req)
@@ -261,6 +292,46 @@ func TestProxyAuthenticated(t *testing.T) {
 	resp.Body.Close()
 	assert.Equal(t, "foo", string(body))
 	assert.Equal(t, 200, resp.StatusCode)
+
+	// testServer
+	handler := MockServer()
+	testMockServer = httptest.NewUnstartedServer(handler)
+	testMockServer.TLS = new(tls.Config)
+	testMockServer.TLS.ClientAuth = tls.RequestClientCert
+	testMockServer.TLS.NextProtos = []string{"http/1.1"}
+	testMockServer.StartTLS()
+	testMockServer.URL = strings.Replace(testMockServer.URL, "127.0.0.1", "localhost", 1)
+
+	req, err = http.NewRequest("GET", testProxyServer.URL+"/proxy?uri="+testMockServer.URL+"/webid-rsa", nil)
+	assert.NoError(t, err)
+	resp, err = testClient.Do(req)
+	assert.NoError(t, err)
+	body, err = ioutil.ReadAll(resp.Body)
+	assert.NoError(t, err)
+	resp.Body.Close()
+	assert.Equal(t, 401, resp.StatusCode)
+
+	req, err = http.NewRequest("GET", testProxyServer.URL+"/proxy?uri="+testMockServer.URL+"/webid-rsa", nil)
+	assert.NoError(t, err)
+	req.Header.Set("User", alice)
+	resp, err = testClient.Do(req)
+	assert.NoError(t, err)
+	body, err = ioutil.ReadAll(resp.Body)
+	assert.NoError(t, err)
+	resp.Body.Close()
+	assert.Equal(t, "foo", string(body))
+	assert.Equal(t, 200, resp.StatusCode)
+
+	// retry with cookie
+	req, err = http.NewRequest("GET", testProxyServer.URL+"/proxy?uri="+testMockServer.URL+"/cookies", nil)
+	assert.NoError(t, err)
+	req.Header.Set("User", alice)
+	resp, err = testClient.Do(req)
+	assert.NoError(t, err)
+	body, err = ioutil.ReadAll(resp.Body)
+	assert.NoError(t, err)
+	resp.Body.Close()
+	assert.Equal(t, 401, resp.StatusCode)
 }
 
 func TestProxyNotAuthenticated(t *testing.T) {
@@ -270,7 +341,19 @@ func TestProxyNotAuthenticated(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, 200, resp.StatusCode)
 
-	req, err = http.NewRequest("GET", testProxyServer.URL+"/proxy?uri="+testMockServer.URL+"/401", nil)
+	req, err = http.NewRequest("GET", testProxyServer.URL+"/proxy?uri="+testMockServer.URL+"/webid-tls", nil)
+	assert.NoError(t, err)
+	resp, err = testClient.Do(req)
+	assert.NoError(t, err)
+	assert.Equal(t, 401, resp.StatusCode)
+
+	req, err = http.NewRequest("GET", testProxyServer.URL+"/proxy?uri="+testMockServer.URL+"/webid-rsa", nil)
+	assert.NoError(t, err)
+	resp, err = testClient.Do(req)
+	assert.NoError(t, err)
+	assert.Equal(t, 401, resp.StatusCode)
+
+	req, err = http.NewRequest("GET", testProxyServer.URL+"/proxy?uri="+testMockServer.URL+"/cookies", nil)
 	assert.NoError(t, err)
 	resp, err = testClient.Do(req)
 	assert.NoError(t, err)
@@ -330,9 +413,21 @@ func TestProxyNoUser(t *testing.T) {
 	server := httptest.NewServer(handler)
 	server.URL = strings.Replace(server.URL, "127.0.0.1", "localhost", 1)
 
-	req, err := http.NewRequest("GET", server.URL+"/proxy?uri="+testMockServer.URL+"/401", nil)
+	req, err := http.NewRequest("GET", server.URL+"/proxy?uri="+testMockServer.URL+"/webid-tls", nil)
 	assert.NoError(t, err)
 	resp, err := testClient.Do(req)
+	assert.NoError(t, err)
+	assert.Equal(t, 401, resp.StatusCode)
+
+	req, err = http.NewRequest("GET", server.URL+"/proxy?uri="+testMockServer.URL+"/webid-rsa", nil)
+	assert.NoError(t, err)
+	resp, err = testClient.Do(req)
+	assert.NoError(t, err)
+	assert.Equal(t, 401, resp.StatusCode)
+
+	req, err = http.NewRequest("GET", server.URL+"/proxy?uri="+testMockServer.URL+"/cookies", nil)
+	assert.NoError(t, err)
+	resp, err = testClient.Do(req)
 	assert.NoError(t, err)
 	assert.Equal(t, 401, resp.StatusCode)
 }
@@ -350,9 +445,21 @@ func TestProxyNoAgent(t *testing.T) {
 	server := httptest.NewServer(handler)
 	server.URL = strings.Replace(server.URL, "127.0.0.1", "localhost", 1)
 
-	req, err := http.NewRequest("GET", server.URL+"/proxy?uri="+testMockServer.URL+"/401", nil)
+	req, err := http.NewRequest("GET", server.URL+"/proxy?uri="+testMockServer.URL+"/webid-tls", nil)
 	assert.NoError(t, err)
 	resp, err := testClient.Do(req)
+	assert.NoError(t, err)
+	assert.Equal(t, 401, resp.StatusCode)
+
+	req, err = http.NewRequest("GET", server.URL+"/proxy?uri="+testMockServer.URL+"/webid-rsa", nil)
+	assert.NoError(t, err)
+	resp, err = testClient.Do(req)
+	assert.NoError(t, err)
+	assert.Equal(t, 401, resp.StatusCode)
+
+	req, err = http.NewRequest("GET", server.URL+"/proxy?uri="+testMockServer.URL+"/cookies", nil)
+	assert.NoError(t, err)
+	resp, err = testClient.Do(req)
 	assert.NoError(t, err)
 	assert.Equal(t, 401, resp.StatusCode)
 }
@@ -379,6 +486,23 @@ func TestMultiCookie(t *testing.T) {
 	c2 := &http.Cookie{Name: "Session", Value: "sample", HttpOnly: false}
 	req.AddCookie(c2)
 	assert.Equal(t, 2, len(req.Cookies()))
+}
+
+func TestDeleteCookie(t *testing.T) {
+	user := "https://alice.com/profile#me"
+	testCookies := map[string]map[string][]*http.Cookie{}
+	testCookiesL := new(sync.RWMutex)
+
+	req, err := http.NewRequest("GET", "example.org", nil)
+	assert.NoError(t, err)
+	c1 := &http.Cookie{Name: "sample", Value: "test", HttpOnly: false}
+
+	testCookies[user] = map[string][]*http.Cookie{}
+	testCookies[user]["example.org"] = []*http.Cookie{c1}
+
+	req.Host = "example.com"
+	err = forgetCookie(req, user, testCookiesL, testCookies)
+	assert.Error(t, err)
 }
 
 func TestRememberURI(t *testing.T) {

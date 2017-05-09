@@ -119,10 +119,39 @@ Z4UMR7EOcpfdUE9Hf3m/hs+FUR45uBJeDK1HSFHD8bHKD6kv8FPGfJTotc+2xjJw
 oYi+1hqp1fIekaxsyQIDAQAB
 -----END PUBLIC KEY-----`)
 
+	dsaPriv := []byte(`-----BEGIN DSA PRIVATE KEY-----
+MIIBugIBAAKBgQCFTFUQWTgWhHBq5XLVQxf9mGNT7sqpqkv7rIA6E0aPy5odjTQA
+cfqUqsHNttB49D5QmnFRy/PnSMTQAED8g9wmoTpC9XzxxTLTi+kwlAqi+QVg9Nf3
+at1JOCdB8rxs+fo0ZmIoxcCFzhu0Rj6gNBt0BGm8Zbf3+CLZifpEPrR6cQIVANxm
+WDNNSyy3sZRnHczwco2C705nAoGAcFPgrax5XjvuBVW3ivvn8E2VarwyFynqddAB
+0UppC/7aRraUsBDs1m75KpMFjZOeXJJdiYsdTPqTDhorYJxFJNNOgm5fsXVxQV/i
+wmpVOz2nZwdYP7jKa4Ac9VepnHwGb9XfSPSzudhXOIBNPWTURFYxB9OkI9WGPeYy
+b01E6LcCgYAxCP29/tLDPjWFvZ69JamAkSqmGuCbAfbNJBIzPRocSb2h+9o15T66
+ir6x/EQSr9bTtuq/C2oUNqYsZLfEgz4mJs5DICsO/eHinFojtFXK4l2gx7gvBCj7
+kb+15cKkEdR2Y2ExGMME5oGwR8rzLS4e/Rektm7qInSvwpRpXYJ9FgIUP3MfsD46
+UAUi/vfPLqHFncZe5pM=
+-----END DSA PRIVATE KEY-----`)
+
+	dsaPub := []byte(`-----BEGIN PUBLIC DSA KEY-----
+MIIBtjCCASsGByqGSM44BAEwggEeAoGBAIVMVRBZOBaEcGrlctVDF/2YY1Puyqmq
+S/usgDoTRo/Lmh2NNABx+pSqwc220Hj0PlCacVHL8+dIxNAAQPyD3CahOkL1fPHF
+MtOL6TCUCqL5BWD01/dq3Uk4J0HyvGz5+jRmYijFwIXOG7RGPqA0G3QEabxlt/f4
+ItmJ+kQ+tHpxAhUA3GZYM01LLLexlGcdzPByjYLvTmcCgYBwU+CtrHleO+4FVbeK
+++fwTZVqvDIXKep10AHRSmkL/tpGtpSwEOzWbvkqkwWNk55ckl2Jix1M+pMOGitg
+nEUk006Cbl+xdXFBX+LCalU7PadnB1g/uMprgBz1V6mcfAZv1d9I9LO52Fc4gE09
+ZNREVjEH06Qj1YY95jJvTUTotwOBhAACgYAxCP29/tLDPjWFvZ69JamAkSqmGuCb
+AfbNJBIzPRocSb2h+9o15T66ir6x/EQSr9bTtuq/C2oUNqYsZLfEgz4mJs5DICsO
+/eHinFojtFXK4l2gx7gvBCj7kb+15cKkEdR2Y2ExGMME5oGwR8rzLS4e/Rektm7q
+InSvwpRpXYJ9Fg==
+-----END PUBLIC DSA KEY-----`)
+
 	toSign := "some string"
 	claim := sha1.Sum([]byte(toSign))
 
-	_, err := ParseRSAPrivatePEMKey([]byte("test"))
+	_, err = ParseRSAPublicPEMKey(dsaPub)
+	assert.Error(t, err)
+
+	_, err := ParseRSAPrivatePEMKey(dsaPriv)
 	assert.Error(t, err)
 
 	_, err = ParseRSAPrivatePEMKey([]byte(`-----BEGIN RSA PRIVATE KEY-----
