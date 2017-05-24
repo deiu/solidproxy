@@ -1,10 +1,9 @@
 # solidproxy
-
 [![](https://img.shields.io/badge/project-Solid-7C4DFF.svg?style=flat-square)](https://github.com/solid/solid)
-[![Build Status](https://travis-ci.org/solid/solidproxy.svg?branch=master)](https://travis-ci.org/solid/solidproxy)
-[![Coverage Status](https://coveralls.io/repos/github/solid/solidproxy/badge.svg?branch=master)](https://coveralls.io/github/solid/solidproxy?branch=master)
-[![Go report](https://goreportcard.com/badge/github.com/solid/solidproxy)](https://goreportcard.com/report/github.com/solid/solidproxy)
-[![GoDoc](https://camo.githubusercontent.com/be3d6b363bef3cc4f7ac7c0006e323c500dd171f/68747470733a2f2f676f646f632e6f72672f6769746875622e636f6d2f6a756c69656e7363686d6964742f68747470726f757465723f7374617475732e737667)](https://godoc.org/github.com/solid/solidproxy)
+[![Build Status](https://travis-ci.org/deiu/solidproxy.svg?branch=master)](https://travis-ci.org/deiu/solidproxy)
+[![Coverage Status](https://coveralls.io/repos/github/deiu/solidproxy/badge.svg?branch=master)](https://coveralls.io/github/deiu/solidproxy?branch=master)
+[![Go report](https://goreportcard.com/badge/github.com/deiu/solidproxy)](https://goreportcard.com/report/github.com/deiu/solidproxy)
+[![GoDoc](https://camo.githubusercontent.com/be3d6b363bef3cc4f7ac7c0006e323c500dd171f/68747470733a2f2f676f646f632e6f72672f6769746875622e636f6d2f6a756c69656e7363686d6964742f68747470726f757465723f7374617475732e737667)](https://godoc.org/github.com/deiu/solidproxy)
 
 
 Proxy server with authentication (for WebID-TLS delegation) that can be used as a micro-service along a Solid server.
@@ -13,7 +12,7 @@ Proxy server with authentication (for WebID-TLS delegation) that can be used as 
 
 ### Using the source code on Github
 
-`go get -u github.com/solid/solidproxy/proxy-server`
+`go get -u github.com/deiu/solidproxy/proxy-server`
 
 ### Using the Docker image
 
@@ -21,13 +20,13 @@ Proxy server with authentication (for WebID-TLS delegation) that can be used as 
 
 First, you have to pull the docker image:
 
-	docker pull solidproject/solidproxy
+	docker pull deiu/solidproxy
 
 Next, create a file called `env.list` in which you set the configuration variables (read below to find more about them).
 
 Once you're done with the config, save the file and run the docker image:
 
-	docker run --env-file ./env.list -p <host_proxyport>:<container_proxyport> -p <host_agentport>:<container_agentport> solidproject/solidproxy
+	docker run --env-file ./env.list -p <host_proxyport>:<container_proxyport> -p <host_agentport>:<container_agentport> deiu/solidproxy
 
 Replace the above port values with your own port numbers from your configuration.
 
@@ -109,7 +108,7 @@ import (
 	"net/http"
 	"os"
 
-	"github.com/solid/solidproxy"
+	"github.com/deiu/solidproxy"
 )
 
 func main() {
