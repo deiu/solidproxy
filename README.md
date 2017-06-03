@@ -6,7 +6,7 @@
 [![GoDoc](https://camo.githubusercontent.com/be3d6b363bef3cc4f7ac7c0006e323c500dd171f/68747470733a2f2f676f646f632e6f72672f6769746875622e636f6d2f6a756c69656e7363686d6964742f68747470726f757465723f7374617475732e737667)](https://godoc.org/github.com/deiu/solidproxy)
 
 
-Proxy server with authentication (for WebID-TLS delegation) that can be used as a micro-service along a [Solid server](https://github.com/solid/solid-platform#servers).
+Agent/Proxy server with authentication (for WebID-TLS delegation) that can be used as a micro-service along a [Solid server](https://github.com/solid/solid-platform#servers).
 
 ## Installation
 
@@ -30,7 +30,7 @@ Once you're done with the config, save the file and run the docker image:
 
 Replace the above port values with your own port numbers from your configuration.
 
-## Configuration for standalone server
+## Configuration for standalone server or docker image
 
 Solidproxy uses environment variables (for docker compatibility).
 
